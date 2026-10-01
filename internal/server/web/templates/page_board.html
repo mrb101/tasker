@@ -1,0 +1,96 @@
+{{define "content"}}
+{{$p := .Project}}
+<div class="board-bar">
+  <div class="filters" id="boardfilter">
+    <input type="search" name="text" placeholder="Filter cards…" data-hotkey="f">
+    <select name="type"><option value="">All types</option>{{range vocab "types"}}<option>{{.}}</option>{{end}}</select>
+    <select name="epic"><option value="">All epics</option>{{range .D.Epics}}<option value="{{.Ref}}">{{.Ref}} · {{.Title}}</option>{{end}}</select>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" data-toggle="#newepic">New epic</button>
+  <button class="btn" data-toggle="#newqueue">New queue</button>
+</div>
+
+<form id="newepic" class="panel form-grid" data-api="POST /api/projects/{{$p.Key}}/epics" data-then="reload" hidden>
+  <label class="span2">Epic title <input name="title" required placeholder="Authentication hardening"></label>
+  <label class="span2">Description <textarea name="body" rows="3" placeholder="Markdown"></textarea></label>
+  <div class="span2 row end"><button class="btn primary">Create epic</button></div>
+</form>
+
+<form id="newqueue" class="panel form-grid" data-api="POST /api/projects/{{$p.Key}}/queues" data-then="reload" hidden>
+  <label>Queue name <input name="name" required placeholder="auth-lane" pattern="[a-z0-9][a-z0-9._\-]*"></label>
+  <label>Base branch <input name="base_branch" placeholder="main"></label>
+  <label>Worktree path <input name="worktree" placeholder="/home/me/src/api-auth (or run tasker queue bind)"></label>
+  <label>Agent <input name="agent" placeholder="optional"></label>
+  <label class="span2">Description <input name="description"></label>
+  <label class="check"><input type="checkbox" name="stacked"> Stacked: each story branches from the previous story's branch</label>
+  <div class="row end"><button class="btn primary">Create queue</button></div>
+</form>
+
+<div class="board" id="board">
+  <section class="triage" aria-label="Triage">
+    <header class="triage-head">
+      <div class="row"><span class="triage-icon">⇢</span><b class="grow">Triage</b><span class="count">{{$p.Counts.Inbox}}</span></div>
+      <p class="triage-hint">Not in any queue yet. Drag a story onto a queue to schedule it there.</p>
+    </header>
+    <form class="quickadd" data-api="POST /api/projects/{{$p.Key}}/items" data-then="reset">
+      <input name="title" placeholder="New item… (press c)" required data-hotkey="c" autocomplete="off">
+      <div class="row">
+        <select name="type">{{range vocab "types"}}<option>{{.}}</option>{{end}}</select>
+        <select name="priority">{{range vocab "priorities"}}<option {{if eq . "medium"}}selected{{end}}>{{.}}</option>{{end}}</select>
+        <select name="epic" data-omit-empty><option value="">no epic</option>{{range .D.Epics}}<option value="{{.Ref}}">{{.Ref}}</option>{{end}}</select>
+      </div>
+    </form>
+    <div class="cards drop" data-queue="">
+      {{range .D.Inbox}}{{template "card" .}}{{end}}
+    </div>
+    {{if gt .D.InboxMore 0}}<a class="more" href="/p/{{$p.Key}}/items?status=inbox">+{{.D.InboxMore}} more in triage (highest priority shown)</a>{{end}}
+    {{if .D.Loose}}
+    <div class="sub">Active outside queues</div>
+    <div class="cards">{{range .D.Loose}}{{template "card" .}}{{end}}</div>
+    {{end}}
+  </section>
+
+  <div class="queues-label"><span>Queues</span></div>
+
+  {{range .D.Queues}}
+  <section class="col queue q-{{.Status}}" data-queue-col="{{.Name}}">
+    <header class="col-head">
+      <div class="row">
+        <a class="qname grow" href="/q/{{.Project}}/{{.Name}}">{{.Name}}</a>
+        {{if eq .Status "paused"}}<span class="chip warn">paused</span>{{end}}
+        <span class="count">{{.OpenCount}}</span>
+      </div>
+      <div class="qmeta">
+        <span title="Stories branch from {{if .Stacked}}the previous story's branch (stacked){{else}}this base branch{{end}}">⎇ <code>{{.BaseBranch}}</code>{{if .Stacked}} · stacked{{end}}</span>
+        {{if .Agent}}<span>· {{.Agent}}</span>{{end}}
+      </div>
+      {{if .Worktree}}<div class="qmeta muted ellipsis" title="{{.Worktree}}">{{.Worktree}}</div>{{end}}
+    </header>
+    <div class="cards drop ordered" data-queue="{{.Name}}">
+      {{range .Items}}{{template "card" .}}{{end}}
+    </div>
+    {{if gt .More 0}}<a class="more" href="/q/{{.Project}}/{{.Name}}">+{{.More}} more — open queue</a>{{end}}
+    {{if .InReview}}
+    <div class="sub">In review</div>
+    <div class="cards">{{range .InReview}}{{template "card" .}}{{end}}</div>
+    {{end}}
+    {{if .RecentDone}}
+    <details class="done">
+      <summary>Recently done ({{len .RecentDone}})</summary>
+      {{range .RecentDone}}<a class="doneline" href="/i/{{.Ref}}"><span class="ref">{{.Ref}}</span> {{.Title}}</a>{{end}}
+    </details>
+    {{end}}
+  </section>
+  {{else}}
+  <section class="col hint">
+    <div class="panel empty-state">
+      <h3>No queues yet</h3>
+      <p>A queue is one worktree. Stories in a queue run in order, one branch each.</p>
+      <p><button class="btn primary" data-toggle="#newqueue">Create a queue</button></p>
+      <p class="muted small">From a worktree: <code>tasker queue create auth-lane -p {{$p.Key}}</code> then <code>tasker queue bind auth-lane</code></p>
+    </div>
+  </section>
+  {{end}}
+</div>
+{{end}}

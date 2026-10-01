@@ -1,0 +1,113 @@
+{{define "type"}}<span class="type t-{{.}}" title="{{.}}">{{.}}</span>{{end}}
+
+{{define "status"}}<span class="status s-{{.}}">{{label .}}</span>{{end}}
+
+{{define "prio"}}{{if eq . "urgent"}}<span class="prio p-urgent" title="urgent">!!</span>{{else if eq . "high"}}<span class="prio p-high" title="high">!</span>{{else if eq . "low"}}<span class="prio p-low" title="low">↓</span>{{end}}{{end}}
+
+{{define "docstatus"}}<span class="dstatus d-{{.}}">{{label .}}</span>{{end}}
+
+{{define "card"}}
+<article class="card {{if gt .OpenBlockers 0}}blocked{{end}} st-{{.Status}}" draggable="true" data-ref="{{.Ref}}" data-type="{{.Type}}" data-epic="{{.Epic}}" data-prio="{{.Priority}}">
+  <div class="card-top">
+    {{template "type" .Type}}
+    <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a>
+    {{template "prio" .Priority}}
+    <span class="grow"></span>
+    {{if ne .Status "queued"}}{{if ne .Status "inbox"}}{{template "status" .Status}}{{end}}{{end}}
+  </div>
+  <a class="card-title" href="/i/{{.Ref}}">{{.Title}}</a>
+  <div class="card-meta">
+    {{if .Epic}}<a class="chip epic" href="/e/{{.Epic}}" title="{{.EpicTitle}}">{{.Epic}}</a>{{end}}
+    {{if gt .OpenBlockers 0}}<span class="chip warn" title="Waiting on unfinished dependencies">blocked · {{.OpenBlockers}}</span>{{end}}
+    {{if .ClaimedBy}}<span class="chip who" title="Claimed until {{date .ClaimExpires}}">⚑ {{.ClaimedBy}}</span>{{else if .Assignee}}<span class="chip who">{{.Assignee}}</span>{{end}}
+    {{if .Branch}}<code class="branch" title="branch">{{.Branch}}</code>{{end}}
+    {{range .Labels}}<span class="chip lbl">{{.}}</span>{{end}}
+  </div>
+</article>
+{{end}}
+
+{{define "itemrow"}}
+<tr>
+  <td class="nowrap">{{template "type" .Type}} <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a></td>
+  <td class="w100"><a href="/i/{{.Ref}}">{{.Title}}</a> {{template "prio" .Priority}}
+    {{if gt .OpenBlockers 0}}<span class="chip warn">blocked · {{.OpenBlockers}}</span>{{end}}
+    {{range .Labels}}<span class="chip lbl">{{.}}</span>{{end}}</td>
+  <td>{{template "status" .Status}}</td>
+  <td class="nowrap">{{if .Queue}}<a class="muted" href="/q/{{.Project}}/{{.Queue}}">{{.Queue}}</a>{{end}}</td>
+  <td class="nowrap">{{if .Epic}}<a class="chip epic" href="/e/{{.Epic}}" title="{{.EpicTitle}}">{{.Epic}}</a>{{end}}</td>
+  <td class="nowrap muted">{{.Assignee}}</td>
+  <td class="nowrap muted" title="{{date .UpdatedAt}}">{{ago .UpdatedAt}}</td>
+</tr>
+{{end}}
+
+{{define "itemtable"}}
+{{if .}}
+<div class="tablewrap"><table class="list">
+<thead><tr><th>Item</th><th>Title</th><th>Status</th><th>Queue</th><th>Epic</th><th>Assignee</th><th>Updated</th></tr></thead>
+<tbody>{{range .}}{{template "itemrow" .}}{{end}}</tbody>
+</table></div>
+{{else}}<p class="empty">Nothing here.</p>{{end}}
+{{end}}
+
+{{define "docrow"}}
+<tr>
+  <td class="nowrap"><span class="dtype">{{.Type}}</span> <a class="ref" href="/d/{{.Ref}}">{{.Ref}}</a></td>
+  <td class="w100"><a href="/d/{{.Ref}}">{{.Title}}</a>
+    <span class="links">{{range .Links}}<a class="chip" href="/r/{{.Target}}" title="{{.Role}}: {{.Title}}">{{.Target}}</a>{{end}}</span></td>
+  <td>{{template "docstatus" .Status}}</td>
+  <td class="nowrap muted">r{{.Revision}}</td>
+  <td class="nowrap muted">{{.Author}}</td>
+  <td class="nowrap muted" title="{{date .UpdatedAt}}">{{ago .UpdatedAt}}</td>
+</tr>
+{{end}}
+
+{{define "doctable"}}
+{{if .}}
+<div class="tablewrap"><table class="list">
+<thead><tr><th>Doc</th><th>Title</th><th>Status</th><th>Rev</th><th>Author</th><th>Updated</th></tr></thead>
+<tbody>{{range .}}{{template "docrow" .}}{{end}}</tbody>
+</table></div>
+{{else}}<p class="empty">No documents.</p>{{end}}
+{{end}}
+
+{{define "docrefs"}}
+{{range .}}
+<a class="docref" href="/d/{{.Ref}}">
+  <span class="dtype">{{.Type}}</span><span class="ref">{{.Ref}}</span>
+  <span class="grow ellipsis">{{.Title}}</span>
+  {{template "docstatus" .Status}}
+</a>
+{{else}}<p class="empty small">No documents linked.</p>{{end}}
+{{end}}
+
+{{define "comments"}}
+<section class="thread">
+  {{range .List}}
+  <div class="comment k-{{.Kind}}">
+    <div class="c-head"><b>{{.Author}}</b>
+      {{if eq .Kind "approve"}}<span class="dstatus d-approved">approved</span>
+      {{else if eq .Kind "request_changes"}}<span class="dstatus d-changes_requested">requested changes</span>
+      {{else if eq .Kind "submit"}}<span class="dstatus d-in_review">submitted for review</span>
+      {{else if eq .Kind "supersede"}}<span class="dstatus d-superseded">superseded</span>
+      {{else if eq .Kind "reopen"}}<span class="dstatus d-draft">reopened as draft</span>{{end}}
+      {{if .Revision}}<span class="muted">r{{.Revision}}</span>{{end}}
+      <span class="muted" title="{{date .CreatedAt}}">{{ago .CreatedAt}}</span></div>
+    {{if .Body}}<div class="md">{{note .Body}}</div>{{end}}
+  </div>
+  {{else}}<p class="empty small">No comments yet.</p>{{end}}
+  <form class="c-form" data-api="POST /api/comments/{{.Ref}}" data-then="reload">
+    <textarea name="body" rows="3" placeholder="Write a comment (markdown)…" required></textarea>
+    <div class="row end"><button class="btn">Comment</button></div>
+  </form>
+</section>
+{{end}}
+
+{{define "activity"}}
+<ul class="activity">
+{{range .}}
+  <li><span class="muted nowrap" title="{{date .CreatedAt}}">{{ago .CreatedAt}}</span>
+    <b>{{.Actor}}</b> <span class="act">{{.Action}}</span>
+    <a class="ref" href="{{refurl .Ref}}">{{.Ref}}</a> <span class="muted">{{.Detail}}</span></li>
+{{else}}<li class="empty">No activity.</li>{{end}}
+</ul>
+{{end}}

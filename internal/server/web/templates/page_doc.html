@@ -1,0 +1,110 @@
+{{define "content"}}
+{{$d := .D.Doc}}{{$p := .Project}}{{$cl := checklist $d.Body}}
+<div class="page detail">
+  <div class="crumbs"><a href="/p/{{$p.Key}}/docs">{{$p.Key}} docs</a> /</div>
+  <div class="head">
+    <div class="grow">
+      <div class="row"><span class="dtype big">{{$d.Type}}</span> <span class="ref big">{{$d.Ref}}</span> {{template "docstatus" $d.Status}}
+        <span class="muted">r{{$d.Revision}} · by {{$d.Author}} · {{ago $d.UpdatedAt}}</span></div>
+      <h1 class="title">{{$d.Title}}</h1>
+      {{if gt (index $cl 1) 0}}<div class="row"><span class="progress wide"><i style="width:{{pct (index $cl 0) (index $cl 1)}}%"></i></span><span class="muted">{{index $cl 0}}/{{index $cl 1}} steps</span></div>{{end}}
+    </div>
+  </div>
+
+  <div class="reviewbar panel d-{{$d.Status}}-b">
+    {{if eq $d.Status "in_review"}}
+      <b class="grow">Waiting for review</b>
+      <button class="btn primary" data-api="POST /api/docs/{{$d.Ref}}/actions/approve">Approve</button>
+      <button class="btn" data-toggle="#changes">Request changes</button>
+    {{else if eq $d.Status "approved"}}
+      <b class="grow">Approved</b>
+      <button class="btn" data-api="POST /api/docs/{{$d.Ref}}/actions/supersede" data-confirm="Mark as superseded?">Supersede</button>
+      <button class="btn" data-api="POST /api/docs/{{$d.Ref}}/actions/reopen">Reopen as draft</button>
+    {{else if eq $d.Status "changes_requested"}}
+      <b class="grow">Changes requested — waiting for a new revision</b>
+      <button class="btn" data-api="POST /api/docs/{{$d.Ref}}/actions/approve">Approve anyway</button>
+    {{else if eq $d.Status "draft"}}
+      <b class="grow">Draft</b>
+      <button class="btn primary" data-api="POST /api/docs/{{$d.Ref}}/actions/submit">Submit for review</button>
+    {{else}}
+      <b class="grow">Superseded</b>
+      <button class="btn" data-api="POST /api/docs/{{$d.Ref}}/actions/reopen">Reopen as draft</button>
+    {{end}}
+  </div>
+  <form id="changes" class="panel" data-api="POST /api/docs/{{$d.Ref}}/actions/request_changes" data-then="reload" hidden>
+    <label>What should change? <textarea name="comment" rows="4" required placeholder="Markdown. The agent sees this with `tasker doc wait`."></textarea></label>
+    <div class="row end"><button type="button" class="btn" data-toggle="#changes">Cancel</button><button class="btn primary">Request changes</button></div>
+  </form>
+
+  <div class="split">
+    <div class="maincol">
+      <div class="viewtabs">
+        <a class="{{if eq .D.View ""}}on{{end}}" href="/d/{{$d.Ref}}">Document</a>
+        {{if gt $d.Revision 1}}<a class="{{if eq .D.View "diff"}}on{{end}}" href="/d/{{$d.Ref}}?view=diff">Changes since r{{add $d.Revision -1}}</a>{{end}}
+        <a class="{{if eq .D.View "edit"}}on{{end}}" href="/d/{{$d.Ref}}?view=edit">Edit</a>
+        <a class="{{if eq .D.View "raw"}}on{{end}}" href="/d/{{$d.Ref}}?view=raw">Markdown</a>
+      </div>
+      {{if eq .D.View "diff"}}
+        {{if .D.Diff}}
+        <form class="row small" method="get">
+          <input type="hidden" name="view" value="diff">
+          compare <select name="from">{{range .D.Revs}}<option {{if eq2 .Revision $.D.From}}selected{{end}}>{{.Revision}}</option>{{end}}</select>
+          → <select name="to">{{range .D.Revs}}<option {{if eq2 .Revision $.D.To}}selected{{end}}>{{.Revision}}</option>{{end}}</select>
+          <button class="btn small">Show</button>
+        </form>
+        <div class="diff panel">{{range .D.Diff}}<div class="dl op{{if eq .Op "+"}}add{{else if eq .Op "-"}}del{{else}}same{{end}}"><span class="gut">{{.Op}}</span>{{.Text}}</div>{{end}}</div>
+        {{else}}<p class="empty">No earlier revision.</p>{{end}}
+      {{else if eq .D.View "edit"}}
+        <form class="panel" data-api="PATCH /api/docs/{{$d.Ref}}" data-then="goto:/d/{{$d.Ref}}">
+          <label>Title <input name="title" value="{{$d.Title}}"></label>
+          <label>Body <textarea name="body" rows="28" class="mono" data-grow>{{$d.Body}}</textarea></label>
+          <input type="hidden" name="if_revision" value="{{$d.Revision}}" data-type="int">
+          <div class="row end">
+            {{if eq $d.Status "draft"}}<label class="check"><input type="checkbox" name="submit"> submit for review</label>{{end}}
+            <button class="btn primary">Save as r{{add $d.Revision 1}}</button>
+          </div>
+        </form>
+      {{else if eq .D.View "raw"}}
+        <pre class="panel raw">{{$d.Body}}</pre>
+      {{else}}
+        {{with .D.Old}}<div class="banner">Viewing revision {{.Revision}} ({{date .CreatedAt}} by {{.Author}}). <a href="/d/{{$d.Ref}}">Back to current</a></div>
+        <article class="md body panel">{{md .Body}}</article>
+        {{else}}
+        <article class="md body panel">{{if $d.Body}}{{md $d.Body}}{{else}}<p class="empty">Empty document.</p>{{end}}</article>
+        {{end}}
+      {{end}}
+
+      <h2>Review thread</h2>
+      {{template "comments" (dict "List" $d.Comments "Ref" $d.Ref)}}
+    </div>
+
+    <aside class="side">
+      <h3>Linked to</h3>
+      <div class="panel deps">
+        {{range $d.Links}}
+        <div class="dep"><span class="role r-{{.Role}}">{{.Role}}</span><a class="ref" href="/r/{{.Target}}">{{.Target}}</a><span class="grow ellipsis" title="{{.Title}}">{{.Title}}</span>
+          <button class="x" title="Unlink" data-api="DELETE /api/docs/{{$d.Ref}}/links?target={{.Target}}">×</button></div>
+        {{else}}<p class="empty small">Not linked to any item or epic.</p>{{end}}
+        <form class="row addlink" data-api="POST /api/docs/{{$d.Ref}}/links" data-then="reload">
+          <select name="role">{{range vocab "roles"}}<option>{{.}}</option>{{end}}</select>
+          <input name="target" placeholder="{{$p.Key}}-12 or {{$p.Key}}-E1" required size="10">
+          <button class="btn small">Link</button>
+        </form>
+      </div>
+
+      <form class="panel props" data-api="PATCH /api/docs/{{$d.Ref}}" data-autosubmit>
+        <label>Type <select name="type">{{range vocab "doctypes"}}<option {{if eq . $d.Type}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      </form>
+
+      <h3>Revisions</h3>
+      <div class="panel revs">
+        {{range .D.Revs}}
+        <a class="rev {{if eq2 .Revision $d.Revision}}on{{end}}" href="/d/{{$d.Ref}}{{if ne .Revision $d.Revision}}?rev={{.Revision}}{{end}}">
+          <b>r{{.Revision}}</b><span class="grow muted">{{.Author}}</span><span class="muted" title="{{date .CreatedAt}}">{{ago .CreatedAt}}</span></a>
+        {{end}}
+      </div>
+      <button class="btn danger small" data-api="DELETE /api/docs/{{$d.Ref}}" data-confirm="Delete {{$d.Ref}} and its history?" data-then="goto:/p/{{$p.Key}}/docs">Delete document</button>
+    </aside>
+  </div>
+</div>
+{{end}}

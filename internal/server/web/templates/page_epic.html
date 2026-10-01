@@ -1,0 +1,61 @@
+{{define "content"}}
+{{$e := .D.E}}{{$p := .Project}}
+<div class="page detail">
+  <div class="crumbs"><a href="/p/{{$p.Key}}/epics">{{$p.Key}} epics</a> /</div>
+  <div class="head">
+    <div class="grow">
+      <div class="row"><span class="ref big">{{$e.Ref}}</span> {{template "status" $e.Status}}</div>
+      <h1 class="title" data-toggle="#editform">{{$e.Title}}</h1>
+      <div class="row"><span class="progress wide" title="{{$e.Done}} of {{$e.Total}} done"><i style="width:{{pct $e.Done $e.Total}}%"></i></span><span class="muted">{{$e.Done}}/{{$e.Total}} done</span></div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="maincol">
+      <form id="editform" class="panel" data-api="PATCH /api/epics/{{$e.Ref}}" data-then="reload" hidden>
+        <label>Title <input name="title" value="{{$e.Title}}" required></label>
+        <label>Description <textarea name="body" rows="12" data-grow>{{$e.Body}}</textarea></label>
+        <div class="row end"><button type="button" class="btn" data-toggle="#editform">Cancel</button><button class="btn primary">Save</button></div>
+      </form>
+      <div class="md body panel" data-toggle-dbl="#editform">{{if $e.Body}}{{md $e.Body}}{{else}}<p class="empty">No description. <a href="#" data-toggle="#editform">Add one</a></p>{{end}}</div>
+
+      <div class="head"><h2>Items</h2><button class="btn small" data-toggle="#newitem">Add item</button></div>
+      <form id="newitem" class="panel row" data-api="POST /api/projects/{{$p.Key}}/items" data-then="reload" hidden>
+        <input type="hidden" name="epic" value="{{$e.Ref}}">
+        <input name="title" placeholder="Title" required class="grow">
+        <select name="type">{{range vocab "types"}}<option>{{.}}</option>{{end}}</select>
+        <button class="btn primary">Add</button>
+      </form>
+      {{template "itemtable" $e.Items}}
+
+      {{if .D.Graph}}
+      <h2>Dependencies</h2>
+      <div class="panel graph"><pre class="mermaid">{{.D.Graph}}</pre></div>
+      {{end}}
+
+      <h2>Comments</h2>
+      {{template "comments" (dict "List" $e.Comments "Ref" $e.Ref)}}
+    </div>
+    <aside class="side">
+      <form class="panel props" data-api="PATCH /api/epics/{{$e.Ref}}" data-autosubmit>
+        <label>Status <select name="status">{{range vocab "epicstatuses"}}<option {{if eq . $e.Status}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      </form>
+      <h3>Documents</h3>
+      <div class="panel">
+        {{template "docrefs" $e.Docs}}
+        <details class="small">
+          <summary>New document for {{$e.Ref}}</summary>
+          <form data-api="POST /api/projects/{{$p.Key}}/docs" data-then="goto:/d/{ref}">
+            <input type="hidden" name="for" value="{{$e.Ref}}" data-type="list">
+            <select name="type">{{range vocab "doctypes"}}<option>{{.}}</option>{{end}}</select>
+            <input name="title" placeholder="Title" required>
+            <button class="btn small">Create</button>
+          </form>
+        </details>
+      </div>
+      <div class="meta small muted">Created {{date $e.CreatedAt}} · updated {{ago $e.UpdatedAt}}</div>
+      <button class="btn danger small" data-api="DELETE /api/epics/{{$e.Ref}}" data-confirm="Delete {{$e.Ref}}? Its items are kept." data-then="goto:/p/{{$p.Key}}/epics">Delete epic</button>
+    </aside>
+  </div>
+</div>
+{{if .D.Graph}}<script src="/static/mermaid.min.js?v={{.Asset}}"></script>{{end}}
+{{end}}

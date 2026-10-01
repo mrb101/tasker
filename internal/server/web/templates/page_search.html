@@ -1,0 +1,9 @@
+{{define "content"}}
+<div class="page wide">
+  <div class="head"><h1>Search: “{{.D.Q}}”</h1></div>
+  <h2>Items</h2>
+  {{template "itemtable" .D.Items}}
+  <h2>Documents</h2>
+  {{template "doctable" .D.Docs}}
+</div>
+{{end}}

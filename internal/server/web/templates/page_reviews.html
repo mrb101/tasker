@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="page">
+  <div class="head"><h1>Reviews</h1></div>
+  <section>
+    <h2>Documents waiting for review <span class="count">{{len .D.Docs}}</span></h2>
+    <p class="muted small">Plans, research and review findings submitted by agents. Approve them or request changes.</p>
+    {{template "doctable" .D.Docs}}
+  </section>
+  <section>
+    <h2>Changes requested <span class="count">{{len .D.Changes}}</span></h2>
+    <p class="muted small">Waiting for the author to revise.</p>
+    {{template "doctable" .D.Changes}}
+  </section>
+  <section>
+    <h2>Items in review <span class="count">{{len .D.Items}}</span></h2>
+    <p class="muted small">Finished work waiting to merge (PR open).</p>
+    {{if .D.Items}}
+    <div class="tablewrap"><table class="list">
+      <thead><tr><th>Item</th><th>Title</th><th>Branch</th><th>PR</th><th>Queue</th><th>Updated</th></tr></thead>
+      <tbody>{{range .D.Items}}
+        <tr><td class="nowrap">{{template "type" .Type}} <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a></td>
+        <td class="w100"><a href="/i/{{.Ref}}">{{.Title}}</a></td>
+        <td class="nowrap">{{if .Branch}}<code class="branch">{{.Branch}}</code>{{end}}</td>
+        <td class="nowrap">{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">open PR ↗</a>{{end}}</td>
+        <td class="nowrap">{{if .Queue}}<a class="muted" href="/q/{{.Project}}/{{.Queue}}">{{.Queue}}</a>{{end}}</td>
+        <td class="nowrap muted">{{ago .UpdatedAt}}</td>
+        <td class="nowrap"><button class="btn small" data-api="POST /api/items/{{.Ref}}/finish" data-body='{"status":"done"}'>Mark done</button></td></tr>
+      {{end}}</tbody>
+    </table></div>
+    {{else}}<p class="empty">Nothing waiting to merge.</p>{{end}}
+  </section>
+</div>
+{{end}}

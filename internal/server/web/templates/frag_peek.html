@@ -1,0 +1,56 @@
+{{define "peek"}}{{$it := .It}}
+<div class="peek" data-ref="{{$it.Ref}}">
+  <header class="peek-head">
+    <div class="row">
+      {{template "type" $it.Type}} <span class="ref big">{{$it.Ref}}</span> {{template "status" $it.Status}} {{template "prio" $it.Priority}}
+      <span class="grow"></span>
+      <span class="peek-pos muted small"></span>
+      <button class="x peek-nav" type="button" data-peek="prev" title="Previous (← or k)">‹</button>
+      <button class="x peek-nav" type="button" data-peek="next" title="Next (→ or j)">›</button>
+      <button class="x" type="button" data-peek="close" title="Close (Esc)">×</button>
+    </div>
+    <h2 class="peek-title">{{$it.Title}}</h2>
+    <div class="card-meta">
+      {{if $it.Epic}}<a class="chip epic" href="/e/{{$it.Epic}}" title="{{$it.EpicTitle}}">{{$it.Epic}} · {{$it.EpicTitle}}</a>{{end}}
+      {{if $it.Queue}}<span class="chip">queue {{$it.Queue}}</span>{{end}}
+      {{if $it.Branch}}<code class="branch">{{$it.Branch}}</code>{{end}}
+      {{if $it.ClaimedBy}}<span class="chip who">⚑ {{$it.ClaimedBy}}</span>{{else if $it.Assignee}}<span class="chip who">{{$it.Assignee}}</span>{{end}}
+      {{range $it.Labels}}<span class="chip lbl">{{.}}</span>{{end}}
+    </div>
+  </header>
+
+  <div class="peek-scroll">
+    {{if $it.BlockedBy}}
+    <div class="peek-deps">
+      <div class="muted small">Blocked by</div>
+      {{range $it.BlockedBy}}<div class="dep {{if closed .Status}}ok{{end}}"><a class="ref" href="/i/{{.Ref}}" data-peek-ref="{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{template "status" .Status}}</div>{{end}}
+    </div>
+    {{end}}
+    {{if $it.Blocks}}
+    <div class="peek-deps">
+      <div class="muted small">Blocks</div>
+      {{range $it.Blocks}}<div class="dep"><a class="ref" href="/i/{{.Ref}}" data-peek-ref="{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{template "status" .Status}}</div>{{end}}
+    </div>
+    {{end}}
+    {{if $it.Docs}}<div class="peek-docs">{{template "docrefs" $it.Docs}}</div>{{end}}
+    <div class="md body">{{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description.</p>{{end}}</div>
+    {{if $it.Comments}}<p class="muted small">{{len $it.Comments}} comment(s) — open the full page to read them.</p>{{end}}
+  </div>
+
+  <footer class="peek-foot">
+    <form class="row" data-api="PATCH /api/items/{{$it.Ref}}" data-autosubmit data-peek-form>
+      <label class="inline">Queue
+        <select name="queue" data-advance>
+          <option value="" {{if not $it.Queue}}selected{{end}}>triage (no queue)</option>
+          {{range .Queues}}<option value="{{.Name}}" {{if eq .Name $it.Queue}}selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+      </label>
+      <label class="inline">Priority
+        <select name="priority">{{range vocab "priorities"}}<option {{if eq . $it.Priority}}selected{{end}}>{{.}}</option>{{end}}</select>
+      </label>
+    </form>
+    <span class="grow"></span>
+    <a class="btn primary" href="/i/{{$it.Ref}}">Open full page →</a>
+  </footer>
+</div>
+{{end}}

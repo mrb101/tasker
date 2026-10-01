@@ -1,0 +1,37 @@
+{{define "content"}}
+{{$p := .Project}}{{$f := .D.F}}
+<div class="page wide">
+  <div class="head">
+    <h1>Items</h1>
+    <button class="btn" data-toggle="#newitem">New item</button>
+  </div>
+  <form id="newitem" class="panel form-grid" data-api="POST /api/projects/{{$p.Key}}/items" data-then="goto:/i/{ref}" hidden>
+    <label class="span2">Title <input name="title" required></label>
+    <label>Type <select name="type">{{range vocab "types"}}<option>{{.}}</option>{{end}}</select></label>
+    <label>Priority <select name="priority">{{range vocab "priorities"}}<option {{if eq . "medium"}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Epic <select name="epic" data-omit-empty><option value="">—</option>{{range .D.Epics}}<option value="{{.Ref}}">{{.Ref}} · {{.Title}}</option>{{end}}</select></label>
+    <label>Queue <select name="queue" data-omit-empty><option value="">triage (no queue)</option>{{range .D.Queues}}<option value="{{.Name}}">{{.Name}}</option>{{end}}</select></label>
+    <label class="span2">Labels <input name="labels" data-type="list" placeholder="comma separated"></label>
+    <label class="span2">Description <textarea name="body" rows="6" placeholder="Markdown"></textarea></label>
+    <div class="span2 row end"><button class="btn primary">Create</button></div>
+  </form>
+
+  <form class="filters panel" method="get">
+    <input type="search" name="q" value="{{$f.Query}}" placeholder="Search title, body, branch">
+    <select name="status">
+      {{$st := ""}}{{range $f.Status}}{{$st = .}}{{end}}
+      <option value="open" {{if eq $st "open"}}selected{{end}}>open</option>
+      <option value="closed" {{if eq $st "closed"}}selected{{end}}>closed</option>
+      {{range vocab "statuses"}}<option value="{{.}}" {{if eq $st .}}selected{{end}}>{{label .}}</option>{{end}}
+    </select>
+    <select name="type"><option value="">any type</option>{{range vocab "types"}}<option {{if eq $f.Type .}}selected{{end}}>{{.}}</option>{{end}}</select>
+    <select name="epic"><option value="">any epic</option>{{range .D.Epics}}<option value="{{.Ref}}" {{if eq $f.Epic .Ref}}selected{{end}}>{{.Ref}} · {{.Title}}</option>{{end}}</select>
+    <select name="queue"><option value="">any queue</option><option value="none" {{if eq $f.Queue "none"}}selected{{end}}>not queued</option>{{range .D.Queues}}<option {{if eq $f.Queue .Name}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+    <input name="label" value="{{$f.Label}}" placeholder="label" size="10">
+    <button class="btn">Filter</button>
+    <a class="muted small" href="/p/{{$p.Key}}/items">reset</a>
+  </form>
+  <p class="muted small">{{len .D.Items}} items</p>
+  {{template "itemtable" .D.Items}}
+</div>
+{{end}}

@@ -1,0 +1,20 @@
+services:
+  tasker:
+    build: .
+    image: tasker:latest
+    container_name: tasker
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7777:7777"
+      # A second address to listen on, e.g. this machine's Tailscale 100.x.y.z,
+      # so other devices on that private network can open tasker. The default
+      # repeats the line above, which Compose collapses into one binding: an
+      # unset variable must never render as ":7777:7777", which would bind every
+      # interface. tasker has no login: everyone who can reach the address can
+      # read and change everything.
+      - "${TASKER_EXTRA_BIND_ADDRESS:-127.0.0.1}:7777:7777"
+    volumes:
+      - tasker-data:/data
+
+volumes:
+  tasker-data:

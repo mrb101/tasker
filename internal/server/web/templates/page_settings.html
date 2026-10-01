@@ -1,0 +1,34 @@
+{{define "content"}}
+{{$p := .Project}}
+<div class="page narrow">
+  <div class="head"><h1>Settings</h1></div>
+  <form class="panel form-grid" data-api="PATCH /api/projects/{{$p.Key}}" data-then="reload">
+    <label>Key <input value="{{$p.Key}}" disabled></label>
+    <label>Name <input name="name" value="{{$p.Name}}"></label>
+    <label class="span2">Description <input name="description" value="{{$p.Description}}"></label>
+    <label class="check span2"><input type="checkbox" name="plan_gate" {{if $p.PlanGate}}checked{{end}}>
+      <span><b>Plan gate</b>: an item can only be started when it (or its epic) has an <em>approved</em> plan document.</span></label>
+    <div class="span2 row end"><button class="btn primary">Save</button></div>
+  </form>
+
+  <h2>Queues</h2>
+  <div class="tablewrap"><table class="list">
+    <thead><tr><th>Queue</th><th>Base</th><th>Worktree</th><th>Agent</th><th>Status</th><th>Open</th></tr></thead>
+    <tbody>
+    {{range .D.Queues}}
+      <tr><td><a href="/q/{{.Project}}/{{.Name}}">{{.Name}}</a></td><td><code>{{.BaseBranch}}</code>{{if .Stacked}} stacked{{end}}</td>
+      <td class="muted small">{{.Worktree}}</td><td>{{.Agent}}</td><td>{{.Status}}</td><td>{{.OpenCount}}</td></tr>
+    {{else}}<tr><td colspan="6" class="empty">No queues.</td></tr>{{end}}
+    </tbody>
+  </table></div>
+
+  <h2>Backup</h2>
+  <p>Download a consistent snapshot of the whole database: <a href="/api/backup">tasker.db</a> (or <code>tasker backup out.db</code>).</p>
+
+  <h2 class="danger-t">Danger zone</h2>
+  <div class="panel danger">
+    <p>Deleting the project removes all its items, epics, queues and documents.</p>
+    <button class="btn danger" data-api="DELETE /api/projects/{{$p.Key}}" data-confirm="Really delete {{$p.Key}} and everything in it?" data-then="goto:/">Delete project</button>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,25 @@
+{{define "content"}}
+{{$p := .Project}}
+<div class="page">
+  <div class="head">
+    <h1>Epics</h1>
+    <button class="btn" data-toggle="#newepic">New epic</button>
+  </div>
+  <form id="newepic" class="panel form-grid" data-api="POST /api/projects/{{$p.Key}}/epics" data-then="goto:/e/{ref}" hidden>
+    <label class="span2">Title <input name="title" required></label>
+    <label class="span2">Description <textarea name="body" rows="5" placeholder="Markdown"></textarea></label>
+    <div class="span2 row end"><button class="btn primary">Create epic</button></div>
+  </form>
+  <div class="epics">
+  {{range .D.Epics}}
+    <a class="epicrow e-{{.Status}}" href="/e/{{.Ref}}">
+      <span class="ref">{{.Ref}}</span>
+      <b class="grow">{{.Title}}</b>
+      {{if ne .Status "open"}}{{template "status" .Status}}{{end}}
+      <span class="progress" title="{{.Done}} of {{.Total}} done"><i style="width:{{pct .Done .Total}}%"></i></span>
+      <span class="muted nowrap">{{.Done}}/{{.Total}}</span>
+    </a>
+  {{else}}<p class="empty">No epics yet. Epics group related stories; queues decide where and in which order they run.</p>{{end}}
+  </div>
+</div>
+{{end}}

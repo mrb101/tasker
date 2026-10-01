@@ -1,0 +1,94 @@
+{{define "content"}}
+{{$it := .D.It}}{{$p := .Project}}
+<div class="page detail">
+  <div class="crumbs"><a href="/p/{{$p.Key}}/items">{{$p.Key}} items</a> / {{if $it.Epic}}<a href="/e/{{$it.Epic}}">{{$it.Epic}} {{$it.EpicTitle}}</a> /{{end}}</div>
+  <div class="head">
+    <div class="grow">
+      <div class="row">{{template "type" $it.Type}} <span class="ref big">{{$it.Ref}}</span> {{template "status" $it.Status}} {{template "prio" $it.Priority}}</div>
+      <h1 class="title" data-toggle="#editform" title="Click to edit">{{$it.Title}}</h1>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="maincol">
+      {{if gt $it.OpenBlockers 0}}<div class="banner warn">Blocked by {{$it.OpenBlockers}} unfinished item(s). See dependencies.</div>{{end}}
+      <form id="editform" class="panel" data-api="PATCH /api/items/{{$it.Ref}}" data-then="reload" hidden>
+        <label>Title <input name="title" value="{{$it.Title}}" required></label>
+        <label>Description <textarea name="body" rows="16" data-grow>{{$it.Body}}</textarea></label>
+        <input type="hidden" name="if_version" value="{{$it.Version}}" data-type="int">
+        <div class="row end"><button type="button" class="btn" data-toggle="#editform">Cancel</button><button class="btn primary">Save</button></div>
+      </form>
+      <div class="md body panel" data-toggle-dbl="#editform">
+        {{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description. <a href="#" data-toggle="#editform">Add one</a></p>{{end}}
+      </div>
+
+      <h2>Comments</h2>
+      {{template "comments" (dict "List" $it.Comments "Ref" $it.Ref)}}
+
+      <details class="acts">
+        <summary>Activity</summary>
+        {{template "activity" $it.Activity}}
+      </details>
+    </div>
+
+    <aside class="side">
+      <form class="panel props" data-api="PATCH /api/items/{{$it.Ref}}" data-autosubmit>
+        <label>Status <select name="status">{{range vocab "statuses"}}<option value="{{.}}" {{if eq . $it.Status}}selected{{end}}>{{label .}}</option>{{end}}</select></label>
+        <label>Type <select name="type">{{range vocab "types"}}<option {{if eq . $it.Type}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+        <label>Priority <select name="priority">{{range vocab "priorities"}}<option {{if eq . $it.Priority}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+        <label>Epic <select name="epic"><option value="">—</option>{{range .D.Epics}}<option value="{{.Ref}}" {{if eq .Ref $it.Epic}}selected{{end}}>{{.Ref}} · {{.Title}}</option>{{end}}</select></label>
+        <label>Queue <select name="queue"><option value="">— triage (no queue) —</option>{{range .D.Queues}}<option value="{{.Name}}" {{if eq .Name $it.Queue}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        <label>Assignee <input name="assignee" value="{{$it.Assignee}}"></label>
+        <label>Branch <input name="branch" value="{{$it.Branch}}" class="mono" placeholder="set on start"></label>
+        <label>PR <input name="pr_url" value="{{$it.PRURL}}" placeholder="https://…"></label>
+        <label>Labels <input name="labels" value="{{join $it.Labels ", "}}" data-type="list"></label>
+      </form>
+      {{if $it.PRURL}}<p class="small"><a href="{{$it.PRURL}}" target="_blank" rel="noopener">Open pull request ↗</a></p>{{end}}
+      {{if $it.ClaimedBy}}
+      <div class="panel small">⚑ Claimed by <b>{{$it.ClaimedBy}}</b> until {{date $it.ClaimExpires}}
+        <button class="btn small" data-api="POST /api/items/{{$it.Ref}}/release" data-body='{"force":true}'>Release</button></div>
+      {{end}}
+      {{if $it.SharesBranch}}
+      <div class="panel small">Shares branch with {{range $it.SharesBranch}}<a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a> {{end}}</div>
+      {{end}}
+
+      <h3>Dependencies</h3>
+      <div class="panel deps">
+        {{if $it.BlockedBy}}<div class="muted small">Blocked by</div>
+        {{range $it.BlockedBy}}<div class="dep {{if closed .Status}}ok{{end}}"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{template "status" .Status}}
+          <button class="x" title="Remove" data-api="DELETE /api/items/{{$it.Ref}}/links" data-body='{"kind":"blocked_by","target":"{{.Ref}}"}'>×</button></div>{{end}}{{end}}
+        {{if $it.Blocks}}<div class="muted small">Blocks</div>
+        {{range $it.Blocks}}<div class="dep"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{template "status" .Status}}
+          <button class="x" title="Remove" data-api="DELETE /api/items/{{$it.Ref}}/links" data-body='{"kind":"blocks","target":"{{.Ref}}"}'>×</button></div>{{end}}{{end}}
+        {{if $it.Related}}<div class="muted small">Related</div>
+        {{range $it.Related}}<div class="dep"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>
+          <button class="x" title="Remove" data-api="DELETE /api/items/{{$it.Ref}}/links" data-body='{"kind":"relates","target":"{{.Ref}}"}'>×</button></div>{{end}}{{end}}
+        <form class="row addlink" data-api="POST /api/items/{{$it.Ref}}/links" data-then="reload">
+          <select name="kind"><option value="blocked_by">blocked by</option><option value="blocks">blocks</option><option value="relates">relates to</option></select>
+          <input name="target" placeholder="{{$p.Key}}-12" required size="8">
+          <button class="btn small">Add</button>
+        </form>
+      </div>
+
+      <h3>Documents</h3>
+      <div class="panel">
+        {{template "docrefs" $it.Docs}}
+        <details class="small">
+          <summary>New document for {{$it.Ref}}</summary>
+          <form data-api="POST /api/projects/{{$p.Key}}/docs" data-then="goto:/d/{ref}">
+            <input type="hidden" name="for" value="{{$it.Ref}}" data-type="list">
+            <select name="type">{{range vocab "doctypes"}}<option {{if eq . "plan"}}selected{{end}}>{{.}}</option>{{end}}</select>
+            <input name="title" placeholder="Title" required>
+            <button class="btn small">Create</button>
+          </form>
+        </details>
+      </div>
+
+      <div class="meta small muted">
+        Created {{date $it.CreatedAt}} · updated {{ago $it.UpdatedAt}} · v{{$it.Version}}
+      </div>
+      <button class="btn danger small" data-api="DELETE /api/items/{{$it.Ref}}" data-confirm="Delete {{$it.Ref}}?" data-then="goto:/p/{{$p.Key}}">Delete item</button>
+    </aside>
+  </div>
+</div>
+{{end}}

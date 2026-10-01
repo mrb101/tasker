@@ -1,0 +1,58 @@
+{{define "content"}}
+{{$q := .D.Q}}{{$n := .D.Next}}
+<div class="page">
+  <div class="head">
+    <div>
+      <div class="crumbs"><a href="/p/{{$q.Project}}">{{$q.Project}} queues</a> /</div>
+      <h1>{{$q.Name}} {{if ne $q.Status "active"}}<span class="chip warn">{{$q.Status}}</span>{{end}}</h1>
+      {{if $q.Description}}<p class="muted">{{$q.Description}}</p>{{end}}
+    </div>
+    <div class="row">
+      {{if eq $q.Status "active"}}<button class="btn" data-api="PATCH /api/queues/{{$q.Project}}/{{$q.Name}}" data-body='{"status":"paused"}'>Pause</button>
+      {{else}}<button class="btn" data-api="PATCH /api/queues/{{$q.Project}}/{{$q.Name}}" data-body='{"status":"active"}'>Resume</button>{{end}}
+      <button class="btn" data-toggle="#qedit">Edit</button>
+    </div>
+  </div>
+
+  <form id="qedit" class="panel form-grid" data-api="PATCH /api/queues/{{$q.Project}}/{{$q.Name}}" data-then="goto:/q/{project}/{name}" hidden>
+    <label>Name <input name="name" value="{{$q.Name}}"></label>
+    <label>Base branch <input name="base_branch" value="{{$q.BaseBranch}}"></label>
+    <label>Worktree <input name="worktree" value="{{$q.Worktree}}"></label>
+    <label>Agent <input name="agent" value="{{$q.Agent}}"></label>
+    <label class="span2">Description <input name="description" value="{{$q.Description}}"></label>
+    <label class="check span2"><input type="checkbox" name="stacked" {{if $q.Stacked}}checked{{end}}> Stacked branches (each story branches from the previous one)</label>
+    <div class="span2 row">
+      <button type="button" class="btn danger" data-api="DELETE /api/queues/{{$q.Project}}/{{$q.Name}}" data-confirm="Delete queue {{$q.Name}}? Waiting items go back to triage." data-then="goto:/p/{{$q.Project}}">Delete queue</button>
+      <button type="button" class="btn" data-api="PATCH /api/queues/{{$q.Project}}/{{$q.Name}}" data-body='{"status":"archived"}' data-then="goto:/p/{{$q.Project}}">Archive</button>
+      <span class="grow"></span><button class="btn primary">Save</button>
+    </div>
+  </form>
+
+  <div class="facts">
+    <div><span class="muted">Branches from</span> <code>{{$q.BaseBranch}}</code>{{if $q.Stacked}} (stacked){{end}}</div>
+    <div><span class="muted">Worktree</span> {{if $q.Worktree}}<code>{{$q.Worktree}}</code>{{else}}<em>not bound</em> — run <code>tasker queue bind {{$q.Name}}</code> inside it{{end}}</div>
+    {{if $q.Agent}}<div><span class="muted">Agent</span> {{$q.Agent}}</div>{{end}}
+  </div>
+
+  {{if $n}}
+  <div class="panel next">
+    <div class="muted small">What <code>tasker next</code> returns here</div>
+    {{if $n.Item}}
+      <div class="row"><a class="ref" href="/i/{{$n.Item.Ref}}">{{$n.Item.Ref}}</a> <b class="grow">{{$n.Item.Title}}</b>
+      <code class="branch">{{$n.Branch}}</code> <span class="muted">from</span> <code class="branch">{{$n.BaseBranch}}</code></div>
+      <div class="muted small">{{$n.Message}}</div>
+    {{else}}<div>{{$n.Message}}</div>{{end}}
+    {{range $n.Skipped}}<div class="small muted">skipped <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a>: {{.Reason}}</div>{{end}}
+  </div>
+  {{end}}
+
+  <h2>Order <span class="count">{{len $q.Items}}</span></h2>
+  <div class="qorder cards drop ordered" data-queue="{{$q.Name}}">
+    {{range $q.Items}}{{template "card" .}}{{end}}
+  </div>
+  {{if not $q.Items}}<p class="empty">Queue is empty. Drag stories into it from Triage on the board.</p>{{end}}
+
+  {{if $q.InReview}}<h2>In review</h2>{{template "itemtable" $q.InReview}}{{end}}
+  {{if $q.RecentDone}}<h2>Recently done</h2>{{template "itemtable" $q.RecentDone}}{{end}}
+</div>
+{{end}}

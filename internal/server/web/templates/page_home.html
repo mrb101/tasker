@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="page">
+  <div class="head">
+    <h1>Projects</h1>
+    <button class="btn" data-toggle="#newproject">New project</button>
+  </div>
+  <form id="newproject" class="panel form-grid" data-api="POST /api/projects" data-then="goto:/p/{key}" {{if .Projects}}hidden{{end}}>
+    <label>Key <input name="key" placeholder="API" required pattern="[A-Za-z][A-Za-z0-9]{1,9}" style="text-transform:uppercase"></label>
+    <label>Name <input name="name" placeholder="Public API"></label>
+    <label class="span2">Description <input name="description"></label>
+    <div class="span2 row end"><button class="btn primary">Create project</button></div>
+  </form>
+
+  <div class="grid cards3">
+    {{range .Projects}}
+    <a class="pcard" href="/p/{{.Key}}">
+      <div class="row"><span class="pkey">{{.Key}}</span><b class="grow">{{.Name}}</b>{{if .PlanGate}}<span class="chip gate">plan gate</span>{{end}}</div>
+      {{if .Description}}<p class="muted">{{.Description}}</p>{{end}}
+      {{with .Counts}}
+      <div class="stats">
+        <span><b>{{.Inbox}}</b> in triage</span>
+        <span><b>{{.Queued}}</b> queued</span>
+        <span class="s-active-t"><b>{{.Active}}</b> active</span>
+        <span class="s-review-t"><b>{{.Review}}</b> review</span>
+        <span><b>{{.Done}}</b> done</span>
+      </div>
+      <div class="stats muted"><span>{{.Queues}} queues</span><span>{{.Epics}} open epics</span>{{if .DocsInReview}}<span class="d-in_review-t">{{.DocsInReview}} docs to review</span>{{end}}</div>
+      {{end}}
+    </a>
+    {{else}}
+    <div class="panel empty-state">
+      <h3>No projects yet</h3>
+      <p>Create one here, or from a terminal: <code>tasker project create API "Public API"</code></p>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="cols2">
+    <section>
+      <h2>Waiting for your review</h2>
+      {{template "doctable" .D.Reviews}}
+    </section>
+    <section>
+      <h2>Recent activity</h2>
+      {{template "activity" .D.Activity}}
+    </section>
+  </div>
+</div>
+{{end}}
