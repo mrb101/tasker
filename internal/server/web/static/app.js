@@ -211,7 +211,7 @@
       return;
     }
     const card = e.target.closest('#main .card');
-    if (!card || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!card || e.target.closest('.sel') || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = e.target.closest('a');
     if (a && !a.classList.contains('card-title') && !a.closest('.card-top')) return; // epic chip etc. navigate
     e.preventDefault();
@@ -251,6 +251,118 @@
   });
   document.addEventListener('focusout', hideTip);
   document.addEventListener('scroll', hideTip, true);
+
+  // ---- selection & bulk changes ----
+  const sel = [];               // selected refs, in the order they were picked
+  let lastPicked = null;        // for shift-click ranges
+
+  function setSelected(ref, on) {
+    const i = sel.indexOf(ref);
+    if (on && i < 0) sel.push(ref);
+    if (!on && i >= 0) sel.splice(i, 1);
+  }
+
+  function syncSelection() {
+    const present = new Set($$('#main [data-sel]').map((c) => c.dataset.sel));
+    for (let i = sel.length - 1; i >= 0; i--) if (!present.has(sel[i])) sel.splice(i, 1);
+    $$('#main [data-sel]').forEach((c) => {
+      c.checked = sel.includes(c.dataset.sel);
+      const card = c.closest('.card, tr');
+      if (card) card.classList.toggle('selected', c.checked);
+    });
+    const bar = $('#bulkbar');
+    if (!bar) return;
+    bar.hidden = sel.length === 0;
+    $('.bulk-count', bar).textContent = sel.length === 1 ? '1 selected' : `${sel.length} selected`;
+    if (!bar.hidden) loadBulkOptions();
+  }
+
+  // Queue and epic choices for the bar, fetched once per page.
+  let bulkLoaded = false;
+  async function loadBulkOptions() {
+    if (bulkLoaded) return;
+    bulkLoaded = true;
+    try {
+      const [queues, epics] = await Promise.all([
+        api('GET /api/queues?project=' + project()),
+        api('GET /api/projects/' + project() + '/epics'),
+      ]);
+      const qs = $('[data-bulk=queue]');
+      queues.forEach((q) => { const o = document.createElement('option'); o.value = q.name; o.textContent = q.name; qs.appendChild(o); });
+      const es = $('[data-bulk=epic]');
+      epics.forEach((ep) => { const o = document.createElement('option'); o.value = ep.ref; o.textContent = ep.ref.split('-').pop() + ' · ' + ep.title; es.appendChild(o); });
+    } catch (err) { bulkLoaded = false; }
+  }
+
+  // The checkboxes a "select all" control governs: its column's cards, or its table's rows.
+  function scopeOf(el) {
+    const table = el.closest('table');
+    if (table) return $$('tbody [data-sel]', table);
+    const col = el.closest('.col, .triage, .page');
+    return col ? $$('.cards [data-sel]', col).filter((c) => !c.closest('.card.filtered')) : [];
+  }
+
+  document.addEventListener('click', (e) => {
+    const box = e.target.closest('#main input[data-sel]');
+    if (box) {
+      e.stopPropagation();
+      if (e.shiftKey && lastPicked) {
+        const all = scopeOf(box);
+        const a = all.findIndex((c) => c.dataset.sel === lastPicked), b = all.indexOf(box);
+        if (a >= 0 && b >= 0) all.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((c) => setSelected(c.dataset.sel, box.checked));
+      }
+      setSelected(box.dataset.sel, box.checked);
+      lastPicked = box.dataset.sel;
+      syncSelection();
+      return;
+    }
+    const all = e.target.closest('#main [data-selall]');
+    if (all) {
+      const boxes = scopeOf(all);
+      const on = all.type === 'checkbox' ? all.checked : !boxes.every((c) => sel.includes(c.dataset.sel));
+      boxes.forEach((c) => setSelected(c.dataset.sel, on));
+      syncSelection();
+      return;
+    }
+    if (e.target.closest('[data-bulk-clear]')) { sel.length = 0; syncSelection(); return; }
+    const lab = e.target.closest('[data-bulk-label-op]');
+    if (lab) {
+      const input = $('[data-bulk-label]');
+      const v = input.value.trim();
+      if (!v) { input.focus(); return; }
+      bulkApply(lab.dataset.bulkLabelOp === 'add' ? { add_labels: [v] } : { remove_labels: [v] }, `label "${v}" ${lab.dataset.bulkLabelOp === 'add' ? 'added' : 'removed'}`)
+        .then(() => (input.value = ''));
+    }
+  }, true);
+
+  document.addEventListener('change', (e) => {
+    const sel_ = e.target.closest('#bulkbar select[data-bulk]');
+    if (sel_ && sel_.value) {
+      const field = sel_.dataset.bulk;
+      let value = sel_.value, what = `${field} → ${sel_.options[sel_.selectedIndex].textContent}`;
+      if (value === '__triage' || value === '__none') value = '';
+      sel_.value = '';
+      bulkApply({ [field]: value }, what);
+      return;
+    }
+    if (e.target.closest('form[data-autoget]')) e.target.closest('form').requestSubmit();
+  });
+
+  async function bulkApply(patch, what) {
+    const refs = sel.slice();
+    try {
+      const res = await api(`POST /api/projects/${project()}/items/batch`, { refs, patch });
+      toast(`${res.length} stor${res.length === 1 ? 'y' : 'ies'}: ${what}`);
+      sel.length = 0;
+      await refresh();
+    } catch (err) {
+      toast(err.message, true); // nothing changed: a bulk change is all or nothing
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sel.length && !$('#peek').open) { sel.length = 0; syncSelection(); }
+  });
 
   // ---- sidebar: mobile toggle, close the project switcher on outside click ----
   document.addEventListener('click', (e) => {
@@ -460,6 +572,7 @@
 
   function afterRender() {
     applyFilter();
+    syncSelection();
     if (window.mermaid && $('.mermaid')) {
       const dark = matchMedia('(prefers-color-scheme: dark)').matches;
       window.mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });

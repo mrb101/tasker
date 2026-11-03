@@ -389,10 +389,55 @@ type ItemFilter struct {
 	Label    string   `json:"label"`
 	Assignee string   `json:"assignee"`
 	Query    string   `json:"q"`
+	Blocked  string   `json:"blocked"` // "only" or "hide"
+	Sort     string   `json:"sort"`    // priority (default) | newest | oldest | epic
 	Limit    int      `json:"limit"`
 }
 
+// itemsFrom is the FROM clause the filter's conditions are written against.
+const itemsFrom = ` FROM items i JOIN projects p ON p.id = i.project_id
+	LEFT JOIN epics e ON e.id = i.epic_id LEFT JOIN queues q ON q.id = i.queue_id `
+
+// CountItems counts the items a filter matches (ignoring Limit and Sort).
+func (s *Store) CountItems(f ItemFilter) (int, error) {
+	w, args, err := itemWhere(f)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	err = s.db.QueryRow(`SELECT count(*)`+itemsFrom+w, args...).Scan(&n)
+	return n, err
+}
+
 func (s *Store) ListItems(f ItemFilter) ([]*Item, error) {
+	w, args, err := itemWhere(f)
+	if err != nil {
+		return nil, err
+	}
+	if f.Limit <= 0 {
+		f.Limit = 500
+	}
+	// Pick the page of ids first, so the per-row subqueries in itemSelect
+	// (open blockers, labels) only run for rows that are returned.
+	order := ` ORDER BY CASE WHEN i.status IN ('done','cancelled') THEN 1 ELSE 0 END, `
+	switch f.Sort {
+	case "", "priority":
+		order += `i.priority, p.key, i.number DESC`
+	case "newest":
+		order += `i.created_at DESC, i.number DESC`
+	case "oldest":
+		order += `i.created_at, i.number`
+	case "epic":
+		order += `CASE WHEN e.number IS NULL THEN 1 ELSE 0 END, e.number, i.priority, i.number`
+	default:
+		return nil, invalid("sort must be priority, newest, oldest or epic")
+	}
+	ids := `SELECT i.id` + itemsFrom + w + order + fmt.Sprintf(" LIMIT %d", f.Limit)
+	return queryItems(s.db, "WHERE i.id IN ("+ids+")"+order, args...)
+}
+
+// itemWhere turns a filter into a WHERE clause over itemsFrom.
+func itemWhere(f ItemFilter) (string, []any, error) {
 	var where []string
 	var args []any
 	if f.Project != "" {
@@ -417,7 +462,7 @@ func (s *Store) ListItems(f ItemFilter) ([]*Item, error) {
 				ors = append(ors, "i.status IN ('done','cancelled')")
 			default:
 				if err := checkOneOf("status", st, ItemStatuses); err != nil {
-					return nil, err
+					return "", nil, err
 				}
 				ors = append(ors, "i.status = ?")
 				args = append(args, st)
@@ -432,7 +477,7 @@ func (s *Store) ListItems(f ItemFilter) ([]*Item, error) {
 	if f.Epic != "" {
 		r, err := ParseRef(f.Epic)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		where = append(where, "p.key = ? AND e.number = ?")
 		args = append(args, r.Project, r.Number)
@@ -469,19 +514,21 @@ func (s *Store) ListItems(f ItemFilter) ([]*Item, error) {
 			args = append(args, like, like, like)
 		}
 	}
-	w := ""
-	if len(where) > 0 {
-		w = "WHERE " + strings.Join(where, " AND ")
+	const openBlockers = `EXISTS (SELECT 1 FROM item_links l JOIN items b ON b.id = l.from_id
+		WHERE l.to_id = i.id AND l.kind = 'blocks' AND b.status NOT IN ('done','cancelled'))`
+	switch f.Blocked {
+	case "":
+	case "only":
+		where = append(where, openBlockers)
+	case "hide":
+		where = append(where, "NOT "+openBlockers)
+	default:
+		return "", nil, invalid("blocked must be only or hide")
 	}
-	if f.Limit <= 0 {
-		f.Limit = 500
+	if len(where) == 0 {
+		return "", args, nil
 	}
-	// Pick the page of ids first, so the per-row subqueries in itemSelect
-	// (open blockers, labels) only run for rows that are returned.
-	const order = ` ORDER BY CASE WHEN i.status IN ('done','cancelled') THEN 1 ELSE 0 END, i.priority, p.key, i.number DESC`
-	ids := `SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
-		LEFT JOIN epics e ON e.id = i.epic_id LEFT JOIN queues q ON q.id = i.queue_id ` + w + order + fmt.Sprintf(" LIMIT %d", f.Limit)
-	return queryItems(s.db, "WHERE i.id IN ("+ids+")"+order, args...)
+	return "WHERE " + strings.Join(where, " AND "), args, nil
 }
 
 // ---- update ----
@@ -504,136 +551,181 @@ type ItemPatch struct {
 }
 
 func (s *Store) UpdateItem(actor, ref string, p ItemPatch) (*Item, error) {
-	err := s.write(actor, func(t *txc) error {
-		it, err := s.item(t, ref)
-		if err != nil {
-			return err
-		}
-		if p.IfVersion != 0 && p.IfVersion != it.Version {
-			return conflict("%s was modified (version %d, you have %d); re-read and retry", it.Ref, it.Version, p.IfVersion)
-		}
-		pr, err := s.project(t, it.Project)
-		if err != nil {
-			return err
-		}
-		var changes []string
-		var epicID any = nil
-		if it.Epic != "" {
-			epicID, _ = s.epicID(t, pr, it.Epic)
-		}
-		if p.Title != nil {
-			if strings.TrimSpace(*p.Title) == "" {
-				return invalid("title cannot be empty")
-			}
-			it.Title = strings.TrimSpace(*p.Title)
-			changes = append(changes, "title")
-		}
-		if p.Body != nil {
-			it.Body = *p.Body
-			changes = append(changes, "body")
-		}
-		if p.Type != nil {
-			if err := checkOneOf("type", *p.Type, ItemTypes); err != nil {
-				return err
-			}
-			it.Type = *p.Type
-			changes = append(changes, "type="+it.Type)
-		}
-		prio, _ := priorityValue(it.Priority)
-		if p.Priority != nil {
-			if prio, err = priorityValue(*p.Priority); err != nil {
-				return err
-			}
-			changes = append(changes, "priority="+priorityName(prio))
-		}
-		if p.Epic != nil {
-			if *p.Epic == "" {
-				epicID = nil
-				changes = append(changes, "epic cleared")
-			} else {
-				id, err := s.epicID(t, pr, *p.Epic)
-				if err != nil {
-					return err
-				}
-				epicID = id
-				changes = append(changes, "epic="+strings.ToUpper(*p.Epic))
-			}
-		}
-		if p.Assignee != nil {
-			it.Assignee = *p.Assignee
-			changes = append(changes, "assignee="+it.Assignee)
-		}
-		if p.Branch != nil {
-			it.Branch = strings.TrimSpace(*p.Branch)
-			changes = append(changes, "branch="+it.Branch)
-		}
-		if p.PRURL != nil {
-			it.PRURL = strings.TrimSpace(*p.PRURL)
-			changes = append(changes, "pr")
-		}
-		if p.Status != nil && normStatus(*p.Status) != it.Status {
-			if err := applyStatus(it, normStatus(*p.Status)); err != nil {
-				return err
-			}
-			changes = append(changes, "status="+it.Status)
-		}
-		var queueID any
-		if it.QueueID != 0 {
-			queueID = it.QueueID
-		}
-		if _, err := t.Exec(`UPDATE items SET title=?, body=?, type=?, status=?, priority=?, epic_id=?, queue_id=?, assignee=?, branch=?, pr_url=?,
-			claimed_by=?, claim_expires=?, closed_at=?, version=version+1, updated_at=? WHERE id=?`,
-			it.Title, it.Body, it.Type, it.Status, prio, epicID, queueID, it.Assignee, it.Branch, it.PRURL,
-			it.ClaimedBy, it.ClaimExpires, it.ClosedAt, now(), it.ID); err != nil {
-			return err
-		}
-		if p.Labels != nil || len(p.AddLabels) > 0 || len(p.RemoveLabels) > 0 {
-			labels := it.Labels
-			if p.Labels != nil {
-				labels = *p.Labels
-			}
-			labels = normLabels(append(labels, p.AddLabels...))
-			rm := map[string]bool{}
-			for _, l := range normLabels(p.RemoveLabels) {
-				rm[l] = true
-			}
-			if _, err := t.Exec(`DELETE FROM item_labels WHERE item_id = ?`, it.ID); err != nil {
-				return err
-			}
-			for _, l := range labels {
-				if rm[l] {
-					continue
-				}
-				if _, err := t.Exec(`INSERT INTO item_labels(item_id, label) VALUES(?,?)`, it.ID, l); err != nil {
-					return err
-				}
-			}
-			changes = append(changes, "labels")
-		}
-		if p.Queue != nil {
-			if *p.Queue == "" {
-				if err := s.queueRemoveTx(t, it.Ref); err != nil {
-					return err
-				}
-			} else {
-				q, err := s.queueInProject(t, pr, *p.Queue)
-				if err != nil {
-					return err
-				}
-				if err := s.queueAddTx(t, q, []string{it.Ref}, Position{Where: PosBottom}); err != nil {
-					return err
-				}
-			}
-		}
-		if len(changes) == 0 {
-			return nil
-		}
-		return t.log(it.ProjectID, it.Project, it.Ref, "item.updated", strings.Join(changes, ", "))
-	})
+	err := s.write(actor, func(t *txc) error { return s.updateItemTx(t, ref, p) })
 	if err != nil {
 		return nil, err
 	}
 	return s.GetItem(ref)
+}
+
+// BulkUpdate applies one change to many items of a project, all or nothing.
+// Only fields that make sense for a group can be set: status, priority, type,
+// epic, queue (moved in the given order), assignee, and labels added or removed.
+func (s *Store) BulkUpdate(actor, projectKey string, refs []string, p ItemPatch) ([]*Item, error) {
+	if len(refs) == 0 {
+		return nil, invalid("no items given")
+	}
+	if len(refs) > 1000 {
+		return nil, invalid("at most 1000 items at once")
+	}
+	if p.Title != nil || p.Body != nil || p.Branch != nil || p.PRURL != nil || p.Labels != nil || p.IfVersion != 0 {
+		return nil, invalid("a bulk change can set status, priority, type, epic, queue, assignee and labels only")
+	}
+	key := strings.ToUpper(projectKey)
+	err := s.write(actor, func(t *txc) error {
+		for _, ref := range refs {
+			r, err := ParseRef(ref)
+			if err != nil {
+				return err
+			}
+			if r.Project != key {
+				return invalid("%s is not in project %s", strings.ToUpper(ref), key)
+			}
+			if err := s.updateItemTx(t, ref, p); err != nil {
+				return fmt.Errorf("%s: %w", strings.ToUpper(ref), err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Item, 0, len(refs))
+	for _, ref := range refs {
+		it, err := s.item(s.db, ref)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, nil
+}
+
+func (s *Store) updateItemTx(t *txc, ref string, p ItemPatch) error {
+	it, err := s.item(t, ref)
+	if err != nil {
+		return err
+	}
+	if p.IfVersion != 0 && p.IfVersion != it.Version {
+		return conflict("%s was modified (version %d, you have %d); re-read and retry", it.Ref, it.Version, p.IfVersion)
+	}
+	pr, err := s.project(t, it.Project)
+	if err != nil {
+		return err
+	}
+	var changes []string
+	var epicID any = nil
+	if it.Epic != "" {
+		epicID, _ = s.epicID(t, pr, it.Epic)
+	}
+	if p.Title != nil {
+		if strings.TrimSpace(*p.Title) == "" {
+			return invalid("title cannot be empty")
+		}
+		it.Title = strings.TrimSpace(*p.Title)
+		changes = append(changes, "title")
+	}
+	if p.Body != nil {
+		it.Body = *p.Body
+		changes = append(changes, "body")
+	}
+	if p.Type != nil {
+		if err := checkOneOf("type", *p.Type, ItemTypes); err != nil {
+			return err
+		}
+		it.Type = *p.Type
+		changes = append(changes, "type="+it.Type)
+	}
+	prio, _ := priorityValue(it.Priority)
+	if p.Priority != nil {
+		if prio, err = priorityValue(*p.Priority); err != nil {
+			return err
+		}
+		changes = append(changes, "priority="+priorityName(prio))
+	}
+	if p.Epic != nil {
+		if *p.Epic == "" {
+			epicID = nil
+			changes = append(changes, "epic cleared")
+		} else {
+			id, err := s.epicID(t, pr, *p.Epic)
+			if err != nil {
+				return err
+			}
+			epicID = id
+			changes = append(changes, "epic="+strings.ToUpper(*p.Epic))
+		}
+	}
+	if p.Assignee != nil {
+		it.Assignee = *p.Assignee
+		changes = append(changes, "assignee="+it.Assignee)
+	}
+	if p.Branch != nil {
+		it.Branch = strings.TrimSpace(*p.Branch)
+		changes = append(changes, "branch="+it.Branch)
+	}
+	if p.PRURL != nil {
+		it.PRURL = strings.TrimSpace(*p.PRURL)
+		changes = append(changes, "pr")
+	}
+	if p.Status != nil && normStatus(*p.Status) != it.Status {
+		if err := applyStatus(it, normStatus(*p.Status)); err != nil {
+			return err
+		}
+		changes = append(changes, "status="+it.Status)
+	}
+	var queueID any
+	if it.QueueID != 0 {
+		queueID = it.QueueID
+	}
+	if _, err := t.Exec(`UPDATE items SET title=?, body=?, type=?, status=?, priority=?, epic_id=?, queue_id=?, assignee=?, branch=?, pr_url=?,
+			claimed_by=?, claim_expires=?, closed_at=?, version=version+1, updated_at=? WHERE id=?`,
+		it.Title, it.Body, it.Type, it.Status, prio, epicID, queueID, it.Assignee, it.Branch, it.PRURL,
+		it.ClaimedBy, it.ClaimExpires, it.ClosedAt, now(), it.ID); err != nil {
+		return err
+	}
+	if p.Labels != nil || len(p.AddLabels) > 0 || len(p.RemoveLabels) > 0 {
+		labels := it.Labels
+		if p.Labels != nil {
+			labels = *p.Labels
+		}
+		labels = normLabels(append(labels, p.AddLabels...))
+		rm := map[string]bool{}
+		for _, l := range normLabels(p.RemoveLabels) {
+			rm[l] = true
+		}
+		if _, err := t.Exec(`DELETE FROM item_labels WHERE item_id = ?`, it.ID); err != nil {
+			return err
+		}
+		for _, l := range labels {
+			if rm[l] {
+				continue
+			}
+			if _, err := t.Exec(`INSERT INTO item_labels(item_id, label) VALUES(?,?)`, it.ID, l); err != nil {
+				return err
+			}
+		}
+		changes = append(changes, "labels")
+	}
+	if p.Queue != nil {
+		if *p.Queue == "" {
+			if err := s.queueRemoveTx(t, it.Ref); err != nil {
+				return err
+			}
+		} else {
+			q, err := s.queueInProject(t, pr, *p.Queue)
+			if err != nil {
+				return err
+			}
+			if err := s.queueAddTx(t, q, []string{it.Ref}, Position{Where: PosBottom}); err != nil {
+				return err
+			}
+		}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return t.log(it.ProjectID, it.Project, it.Ref, "item.updated", strings.Join(changes, ", "))
 }
 
 // applyStatus enforces the status/queue invariants on an in-memory item.

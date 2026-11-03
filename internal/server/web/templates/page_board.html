@@ -30,8 +30,31 @@
 <div class="board" id="board">
   <section class="triage" aria-label="Triage">
     <header class="triage-head">
-      <div class="row"><span class="triage-icon">⇢</span><b class="grow">Triage</b><span class="count">{{$p.Counts.Inbox}}</span></div>
-      <p class="triage-hint">Not in any queue yet. Drag a story onto a queue to schedule it there.</p>
+      <div class="row"><span class="triage-icon">⇢</span><b class="grow">Triage</b>
+        <span class="count" title="{{if .D.TFiltered}}matching the filter, of {{$p.Counts.Inbox}}{{else}}in triage{{end}}">{{if .D.TFiltered}}{{.D.InboxMatching}} of {{end}}{{$p.Counts.Inbox}}</span></div>
+      <p class="triage-hint">Not in any queue yet. Drag a story onto a queue, or tick several and use the bar below.</p>
+      <form class="triage-filter" method="get" data-autoget>
+        {{with .D.TF}}
+        <select name="tsort" aria-label="Sort triage">
+          <option value="">priority</option>
+          <option value="newest" {{if eq .Sort "newest"}}selected{{end}}>newest</option>
+          <option value="oldest" {{if eq .Sort "oldest"}}selected{{end}}>oldest</option>
+          <option value="epic" {{if eq .Sort "epic"}}selected{{end}}>by epic</option>
+        </select>
+        <select name="tepic" aria-label="Triage epic">
+          <option value="">any epic</option>
+          {{range $.D.Epics}}<option value="{{.Ref}}" {{if eq $.D.TF.Epic .Ref}}selected{{end}}>{{shortRef .Ref}} · {{.Title}}</option>{{end}}
+        </select>
+        <select name="tblocked" aria-label="Blocked stories">
+          <option value="">blocked or not</option>
+          <option value="hide" {{if eq .Blocked "hide"}}selected{{end}}>not blocked</option>
+          <option value="only" {{if eq .Blocked "only"}}selected{{end}}>blocked only</option>
+        </select>
+        <input name="tlabel" value="{{.Label}}" placeholder="label" size="7" aria-label="Triage label">
+        {{end}}
+        {{if .D.TFiltered}}<a class="small muted" href="/p/{{$p.Key}}">clear</a>{{end}}
+      </form>
+      <div class="row sel-row"><button type="button" class="linkbtn" data-selall>Select shown</button></div>
     </header>
     <form class="quickadd" data-api="POST /api/projects/{{$p.Key}}/items" data-then="reset">
       <input name="title" placeholder="New item… (press c)" required data-hotkey="c" autocomplete="off">
@@ -44,7 +67,7 @@
     <div class="cards drop" data-queue="">
       {{range .D.Inbox}}{{template "card" .}}{{end}}
     </div>
-    {{if gt .D.InboxMore 0}}<a class="more" href="/p/{{$p.Key}}/items?status=inbox">+{{.D.InboxMore}} more in triage (highest priority shown)</a>{{end}}
+    {{if gt .D.InboxMore 0}}<a class="more" href="/p/{{$p.Key}}/items?status=triage{{with .D.TF.Epic}}&epic={{.}}{{end}}{{with .D.TF.Label}}&label={{.}}{{end}}">+{{.D.InboxMore}} more in triage</a>{{end}}
     {{if .D.Loose}}
     <div class="sub">Active outside queues</div>
     <div class="cards">{{range .D.Loose}}{{template "card" .}}{{end}}</div>
@@ -61,6 +84,7 @@
         {{if eq .Status "paused"}}<span class="chip warn">paused</span>{{end}}
         <span class="count">{{.OpenCount}}</span>
       </div>
+      <div class="row sel-row"><button type="button" class="linkbtn" data-selall>Select shown</button></div>
       <div class="qmeta">
         <span title="Stories branch from {{if .Stacked}}the previous story's branch (stacked){{else}}this base branch{{end}}">⎇ <code>{{.BaseBranch}}</code>{{if .Stacked}} · stacked{{end}}</span>
         {{if .Agent}}<span>· {{.Agent}}</span>{{end}}

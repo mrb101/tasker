@@ -302,7 +302,9 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 	var addL, rmL []string
 	var ifVersion int
 	cmd := &cobra.Command{
-		Use: "update REF", Short: "Update item fields (only flags you pass change)", Args: cobra.ExactArgs(1),
+		Use:   "update REF...",
+		Short: "Update item fields (only flags you pass change); several refs change together, all or nothing",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			patch := map[string]any{}
 			set := func(flag, key, v string) {
@@ -332,6 +334,19 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 			}
 			if ifVersion > 0 {
 				patch["if_version"] = ifVersion
+			}
+			if len(args) > 1 {
+				if _, ok := patch["title"]; ok {
+					return &exitErr{ExitUsage, "error: --title, --body and --branch apply to one item at a time"}
+				}
+				r, err := store.ParseRef(args[0])
+				if err != nil {
+					return err
+				}
+				return call(a, "POST", "/api/projects/"+esc(r.Project)+"/items/batch", map[string]any{"refs": args, "patch": patch}, func(items []*store.Item) {
+					fmt.Fprintf(a.out, "updated %d items\n", len(items))
+					a.printItems(items)
+				})
 			}
 			return call(a, "PATCH", "/api/items/"+esc(args[0]), patch, func(it *store.Item) {
 				fmt.Fprintf(a.out, "updated %s (%s, v%d)\n", it.Ref, it.Status, it.Version)

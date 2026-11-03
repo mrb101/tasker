@@ -55,6 +55,7 @@ Add --json to any command for machine-readable output.
 
 ## Updating
   tasker item update API-12 --status done --add-label perf --if-version 4   # exit 4 if changed meanwhile
+  tasker item update API-12 API-13 API-14 --queue auth-lane --priority high # several at once, all or nothing
   tasker link API-12 --blocked-by API-10 ; tasker unlink API-12 --blocked-by API-10
   tasker comment API-12 "text"           # or -f file / - for stdin
   tasker queue add auth-lane API-12 API-13 [--top|--before API-11|--after API-11]

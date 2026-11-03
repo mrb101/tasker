@@ -71,6 +71,9 @@ Tools mirror the CLI (`tasker_next`, `tasker_start`, `tasker_create_items`, `tas
 - **Queues** board: the Triage tray, then one column per queue; drag to schedule and reorder; quick add (`c`),
   filter (`f`). Click a card for a quick view: read it, move it to a queue or change its priority, step
   through the column with ←/→, and open the full page only when you need it.
+- Bulk triage: tick cards or list rows (shift-click for a range, "Select shown" per column), then move them
+  to a queue, set priority, epic or status, or add/remove a label from the bar at the bottom — all or nothing.
+  Triage sorts (priority, newest, oldest, by epic) and filters (epic, label, blocked) on the server.
 - **Items / Epics / Docs** lists, detail pages with inline editing, dependencies, comments, activity.
 - **Reviews**: every document waiting for you across projects, plus items waiting to merge.
 - Document page: approve / request changes, revision history, diff between revisions.

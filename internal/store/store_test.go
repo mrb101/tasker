@@ -261,3 +261,44 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("human hours: %s %s", HumanHours(72), HumanHours(5))
 	}
 }
+
+func TestBulkUpdate(t *testing.T) {
+	s := newStore(t)
+	must(s.CreateQueue("me", "API", QueueInput{Name: "lane"}))
+	ep := must(s.CreateEpic("me", "API", "E", ""))
+	var refsIn []string
+	for i := 0; i < 4; i++ {
+		refsIn = append(refsIn, must(s.CreateItem("me", "API", ItemInput{Title: "t"})).Ref)
+	}
+	q, prio, epic := "lane", "high", ep.Ref
+	// order of the given refs is the order in the queue
+	got := must(s.BulkUpdate("me", "API", []string{refsIn[2], refsIn[0]}, ItemPatch{Queue: &q, Priority: &prio, Epic: &epic, AddLabels: []string{"x"}}))
+	if len(got) != 2 || got[0].Status != "queued" || got[0].Priority != "high" || got[0].Epic != ep.Ref || got[0].Labels[0] != "x" {
+		t.Fatalf("bulk: %+v", got[0])
+	}
+	lane := must(s.GetQueue("lane"))
+	if r := refs(lane.Items); !eq(r, []string{refsIn[2], refsIn[0]}) {
+		t.Fatalf("order %v", r)
+	}
+	// all or nothing: one bad ref, nothing changes
+	low := "low"
+	if _, err := s.BulkUpdate("me", "API", []string{refsIn[1], "API-999"}, ItemPatch{Priority: &low}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("want not found, got %v", err)
+	}
+	if must(s.GetItem(refsIn[1])).Priority != "medium" {
+		t.Fatal("partial bulk change was kept")
+	}
+	title := "x"
+	if _, err := s.BulkUpdate("me", "API", refsIn, ItemPatch{Title: &title}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("want invalid for title, got %v", err)
+	}
+	// sort and blocked filters
+	must(s.CreateItem("me", "API", ItemInput{Title: "blocked", BlockedBy: []string{refsIn[1]}}))
+	if b := must(s.ListItems(ItemFilter{Project: "API", Status: []string{"triage"}, Blocked: "only"})); len(b) != 1 {
+		t.Fatalf("blocked only: %v", refs(b))
+	}
+	newest := must(s.ListItems(ItemFilter{Project: "API", Status: []string{"triage"}, Sort: "newest", Blocked: "hide"}))
+	if len(newest) != 2 || newest[0].Ref != refsIn[3] {
+		t.Fatalf("newest: %v", refs(newest))
+	}
+}

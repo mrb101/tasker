@@ -9,6 +9,7 @@
 {{define "card"}}
 <article class="card {{if gt .OpenBlockers 0}}blocked{{end}} st-{{.Status}}" draggable="true" data-ref="{{.Ref}}" data-type="{{.Type}}" data-epic="{{.Epic}}" data-prio="{{.Priority}}">
   <div class="card-top">
+    <input type="checkbox" class="sel" data-sel="{{.Ref}}" aria-label="Select {{.Ref}}" title="Select (shift-click for a range)">
     {{template "type" .Type}}
     <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a>
     {{template "prio" .Priority}}
@@ -28,6 +29,7 @@
 
 {{define "itemrow"}}
 <tr>
+  <td class="selcol"><input type="checkbox" class="sel" data-sel="{{.Ref}}" aria-label="Select {{.Ref}}"></td>
   <td class="nowrap">{{template "type" .Type}} <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a></td>
   <td class="w100"><a href="/i/{{.Ref}}">{{.Title}}</a> {{template "prio" .Priority}}
     {{if gt .OpenBlockers 0}}<span class="chip warn">blocked · {{.OpenBlockers}}</span>{{end}}
@@ -43,7 +45,7 @@
 {{define "itemtable"}}
 {{if .}}
 <div class="tablewrap"><table class="list">
-<thead><tr><th>Item</th><th>Title</th><th>Status</th><th>Queue</th><th>Epic</th><th>Assignee</th><th>Updated</th></tr></thead>
+<thead><tr><th class="selcol"><input type="checkbox" class="selall" data-selall aria-label="Select all rows"></th><th>Item</th><th>Title</th><th>Status</th><th>Queue</th><th>Epic</th><th>Assignee</th><th>Updated</th></tr></thead>
 <tbody>{{range .}}{{template "itemrow" .}}{{end}}</tbody>
 </table></div>
 {{else}}<p class="empty">Nothing here.</p>{{end}}

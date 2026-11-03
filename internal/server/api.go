@@ -143,6 +143,16 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		}
 		return st.BulkCreate(actorOf(r), r.PathValue("key"), in)
 	}))
+	mux.HandleFunc("POST /api/projects/{key}/items/batch", h(func(r *http.Request) (any, error) {
+		var in struct {
+			Refs  []string        `json:"refs"`
+			Patch store.ItemPatch `json:"patch"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return st.BulkUpdate(actorOf(r), r.PathValue("key"), in.Refs, in.Patch)
+	}))
 	mux.HandleFunc("GET /api/items/{ref}", h(func(r *http.Request) (any, error) { return st.GetItem(r.PathValue("ref")) }))
 	mux.HandleFunc("PATCH /api/items/{ref}", h(func(r *http.Request) (any, error) {
 		var p store.ItemPatch

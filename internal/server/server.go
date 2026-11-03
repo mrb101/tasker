@@ -373,11 +373,21 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		for _, q := range queues {
 			full = append(full, boardQueue{Queue: q, More: q.OpenCount - len(q.Items)})
 		}
-		inbox, _ := st.ListItems(store.ItemFilter{Project: p.Key, Status: []string{"inbox"}, Limit: perInbox})
+		// Triage is sorted and filtered on the server, so the cards shown are the right ones.
+		qv := r.URL.Query()
+		tf := store.ItemFilter{Project: p.Key, Status: []string{"inbox"}, Limit: perInbox,
+			Sort: qv.Get("tsort"), Epic: qv.Get("tepic"), Label: qv.Get("tlabel"), Blocked: qv.Get("tblocked")}
+		inbox, err := st.ListItems(tf)
+		if err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		matching, _ := st.CountItems(tf)
 		loose, _ := st.ListItems(store.ItemFilter{Project: p.Key, Status: []string{"active", "review"}, Queue: "none"})
 		epics, _ := st.ListEpics(p.Key, false)
 		s.render(w, r, "board", &Page{Title: p.Key + " board", Tab: "board", Project: p, D: map[string]any{
-			"Queues": full, "Inbox": inbox, "InboxMore": p.Counts.Inbox - len(inbox), "Loose": loose, "Epics": epics,
+			"Queues": full, "Inbox": inbox, "InboxMatching": matching, "InboxMore": matching - len(inbox), "Loose": loose, "Epics": epics,
+			"TF": tf, "TFiltered": tf.Epic != "" || tf.Label != "" || tf.Blocked != "",
 		}})
 	})
 
