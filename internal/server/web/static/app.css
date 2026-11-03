@@ -511,3 +511,20 @@ tr.isdone td { opacity: .6; }
 .risks .dep { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; flex-wrap: wrap; }
 .side select, .side input:not([type=checkbox]):not([type=radio]) { width: 100%; max-width: 100%; }
 .side .panel ul.activity { max-height: 420px; overflow-y: auto; }
+
+/* ---- releases on the dashboard ---- */
+.rel-dash { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.rel-dash h2 { margin: 0; font-size: 15px; }
+.rel-now { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .rel-now { grid-template-columns: 1fr; } }
+.rel-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rel-name { font-size: 16px; }
+.rel-facts { display: grid; grid-template-columns: repeat(4, minmax(90px, auto)); gap: 18px; }
+.rel-facts .kpi-value { font-size: 24px; }
+.verdict { font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 10px; white-space: nowrap; }
+.verdict.v-ok { background: var(--ok-soft); color: var(--ok); }
+.verdict.v-warn { background: var(--warn-soft); color: var(--warn); }
+.verdict.v-bad { background: var(--bad-soft); color: var(--bad); }
+.rel-others { display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
+.rel-chip { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
+.rel-chip:hover { border-color: var(--accent); color: inherit; }

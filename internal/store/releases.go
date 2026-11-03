@@ -806,3 +806,56 @@ func (s *Store) ReleaseNotes(ref string) (string, error) {
 	}
 	return b.String(), nil
 }
+
+// Verdicts on a release in progress.
+const (
+	VerdictOnTrack  = "on track"
+	VerdictAtRisk   = "at risk"
+	VerdictOffTrack = "off track"
+)
+
+// Health judges a release from its forecast: whether its open commitments fit
+// by the target (date mode), or whether its scope finishes by the target
+// (scope mode). verdict is "" when there is nothing to judge on.
+func (r *Release) Health(mode string) (verdict, reason string) {
+	f := r.Forecast
+	switch {
+	case r.Status == "shipped" || f == nil:
+		return "", ""
+	case r.Total == 0:
+		return "", "nothing is planned into it yet"
+	case f.Remaining == 0:
+		return VerdictOnTrack, "everything planned is done"
+	case !f.Enough:
+		return "", "not enough finished work yet to forecast from"
+	}
+	if mode == "scope" || r.TargetOn == "" {
+		if r.TargetOn == "" {
+			return "", fmt.Sprintf("likely done by %s (85%% sure by %s)", f.Date50, f.Date85)
+		}
+		switch {
+		case f.Date85 <= r.TargetOn:
+			return VerdictOnTrack, fmt.Sprintf("85%% sure to be done by %s, before the target", f.Date85)
+		case f.Date50 <= r.TargetOn:
+			return VerdictAtRisk, fmt.Sprintf("done by the target only at even odds; 85%% sure by %s", f.Date85)
+		}
+		return VerdictOffTrack, fmt.Sprintf("likely done %s, after the %s target", f.Date50, r.TargetOn)
+	}
+	switch {
+	case f.Likely85 >= r.Committed:
+		return VerdictOnTrack, fmt.Sprintf("the %d open commitments fit by the target, 85%% sure", r.Committed)
+	case f.Likely50 >= r.Committed:
+		return VerdictAtRisk, fmt.Sprintf("the %d open commitments fit only at even odds", r.Committed)
+	}
+	return VerdictOffTrack, fmt.Sprintf("about %d of the %d open commitments fit by the target", f.Likely50, r.Committed)
+}
+
+// DaysLeft is the number of days until the target date (negative when past), or 0 without one.
+func (r *Release) DaysLeft() int {
+	t, err := time.Parse(dateLayout, r.TargetOn)
+	if err != nil {
+		return 0
+	}
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	return int(t.Sub(today).Hours() / 24)
+}

@@ -410,3 +410,26 @@ func TestReleases(t *testing.T) {
 		t.Fatalf("scope forecast: %+v", f)
 	}
 }
+
+func TestReleaseHealth(t *testing.T) {
+	date := func(committed, l85, l50 int) string {
+		r := &Release{Status: "active", Total: 20, Committed: committed, TargetOn: "2026-12-01",
+			Forecast: &Forecast{Enough: true, Remaining: committed + 2, Likely85: l85, Likely50: l50}}
+		v, _ := r.Health("date")
+		return v
+	}
+	if date(10, 12, 15) != VerdictOnTrack || date(10, 8, 12) != VerdictAtRisk || date(10, 4, 7) != VerdictOffTrack {
+		t.Fatal("date-mode verdicts")
+	}
+	scope := func(d50, d85 string) string {
+		r := &Release{Status: "active", Total: 5, TargetOn: "2026-12-01", Forecast: &Forecast{Enough: true, Remaining: 5, Date50: d50, Date85: d85}}
+		v, _ := r.Health("scope")
+		return v
+	}
+	if scope("2026-11-20", "2026-11-28") != VerdictOnTrack || scope("2026-11-25", "2026-12-09") != VerdictAtRisk || scope("2026-12-05", "2026-12-20") != VerdictOffTrack {
+		t.Fatal("scope-mode verdicts")
+	}
+	if v, why := (&Release{Status: "active", Total: 3, Forecast: &Forecast{Remaining: 3}}).Health("date"); v != "" || !strings.Contains(why, "not enough") {
+		t.Fatalf("no history: %q %q", v, why)
+	}
+}

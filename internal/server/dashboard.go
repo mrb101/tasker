@@ -60,3 +60,33 @@ func dashboardView(key string, d *store.Dashboard) map[string]any {
 		"HasQueues":   len(d.Queues) > 0,
 	}
 }
+
+// addReleases adds the release in progress (with its forecast and verdict),
+// the planned releases and the last shipped one. These are "now", not period-bound.
+func addReleases(st *store.Store, p *store.Project, view map[string]any) error {
+	list, err := st.ListReleases(p.Key)
+	if err != nil {
+		return err
+	}
+	var upcoming []*store.Release
+	for _, r := range list {
+		switch r.Status {
+		case "active":
+			full, err := st.GetRelease(r.Ref)
+			if err != nil {
+				return err
+			}
+			verdict, reason := full.Health(p.ReleaseMode)
+			view["Rel"], view["RelVerdict"], view["RelReason"], view["RelDaysLeft"] = full, verdict, reason, full.DaysLeft()
+		case "planned":
+			upcoming = append(upcoming, r)
+		case "shipped":
+			if view["LastShipped"] == nil { // listed newest first
+				view["LastShipped"] = r
+			}
+		}
+	}
+	view["Upcoming"] = upcoming
+	view["HasReleases"] = len(list) > 0
+	return nil
+}

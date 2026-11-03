@@ -43,6 +43,40 @@
     </div>
   </section>
 
+  <section class="panel rel-dash">
+    <header class="row"><h2 class="grow">Releases</h2><a class="small" href="/p/{{$p.Key}}/releases">All releases →</a></header>
+    {{with $v.Rel}}
+    <div class="rel-now">
+      <div class="rel-main">
+        <div class="row">
+          <a class="ref" href="/rel/{{.Ref}}">{{.Ref}}</a><a href="/rel/{{.Ref}}"><b class="rel-name">{{.Name}}</b></a>
+          <span class="status s-active">in progress</span>
+          {{if $v.RelVerdict}}<span class="verdict v-{{if eq $v.RelVerdict "on track"}}ok{{else if eq $v.RelVerdict "at risk"}}warn{{else}}bad{{end}}">{{if eq $v.RelVerdict "on track"}}✓{{else if eq $v.RelVerdict "at risk"}}!{{else}}✕{{end}} {{$v.RelVerdict}}</span>{{end}}
+        </div>
+        {{if .Goal}}<p class="relgoal">{{.Goal}}</p>{{end}}
+        {{if $v.RelReason}}<p class="small">{{$v.RelReason}}.</p>{{end}}
+        <span class="progress wide" title="{{.Done}} of {{.Total}} done"><i style="width:{{pct .Done .Total}}%"></i></span>
+      </div>
+      <div class="rel-facts">
+        <div><div class="kpi-label">Done</div><div class="kpi-value">{{.Done}}<span class="muted small">/{{.Total}}</span></div></div>
+        <div><div class="kpi-label">{{if .TargetOn}}{{if ge $v.RelDaysLeft 0}}Days left{{else}}Days late{{end}}{{else}}Target{{end}}</div>
+          <div class="kpi-value">{{if .TargetOn}}{{if ge $v.RelDaysLeft 0}}{{$v.RelDaysLeft}}{{else}}{{neg $v.RelDaysLeft}}{{end}}{{else}}—{{end}}</div>
+          <div class="muted small">{{if .TargetOn}}target {{.TargetOn}}{{else}}no target date{{end}}</div></div>
+        <div><div class="kpi-label">Open</div><div class="kpi-value">{{.Committed}}</div><div class="muted small">committed · {{.Stretch}} stretch</div></div>
+        <div><div class="kpi-label">At risk</div><div class="kpi-value">{{len .Risks}}</div><div class="muted small">{{if .Risks}}<a href="/rel/{{.Ref}}">see why</a>{{else}}stories{{end}}</div></div>
+      </div>
+    </div>
+    {{else}}
+    <p class="empty">{{if $v.HasReleases}}No release is in progress. Start one from <a href="/p/{{$p.Key}}/releases">Releases</a>.{{else}}No releases planned yet. <a href="/p/{{$p.Key}}/releases">Plan the first one</a>: a goal, and the stories that reach it.{{end}}</p>
+    {{end}}
+    {{if or $v.Upcoming $v.LastShipped}}
+    <div class="rel-others">
+      {{range $v.Upcoming}}<a class="rel-chip" href="/rel/{{.Ref}}"><span class="muted">next</span> <b>{{.Name}}</b> <span class="muted">{{if .StartsOn}}{{.StartsOn}}{{end}}{{if .TargetOn}} → {{.TargetOn}}{{end}} · {{.Total}} stories</span></a>{{end}}
+      {{with $v.LastShipped}}<a class="rel-chip" href="/rel/{{.Ref}}"><span class="muted">shipped</span> <b>{{.Name}}</b> <span class="muted">{{date .ShippedAt}}{{if .Tag}} · {{.Tag}}{{end}} · {{.Done}} stories</span></a>{{end}}
+    </div>
+    {{end}}
+  </section>
+
   <div class="dash-grid">
     <section class="panel chart-card wide2">
       <header><h2>Scope and done</h2><p class="muted small">All stories created vs all done, at the end of each week. The gap is what is left.</p></header>

@@ -421,7 +421,12 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			s.webErr(w, r, err)
 			return
 		}
-		s.render(w, r, "dashboard", &Page{Title: p.Key + " dashboard", Tab: "dashboard", Project: p, D: dashboardView(p.Key, d)})
+		view := dashboardView(p.Key, d)
+		if err := addReleases(st, p, view); err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		s.render(w, r, "dashboard", &Page{Title: p.Key + " dashboard", Tab: "dashboard", Project: p, D: view})
 	})
 
 	mux.HandleFunc("GET /p/{key}/items", func(w http.ResponseWriter, r *http.Request) {

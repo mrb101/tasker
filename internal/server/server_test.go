@@ -110,6 +110,15 @@ func TestAPIFlowAndPages(t *testing.T) {
 	mustStatus(201, c, m)
 	c, m = req(t, ts, "POST", "/api/projects/API/items/batch", map[string]any{"refs": []string{"API-1", "API-2"}, "patch": map[string]any{"release": "API-R1"}})
 	mustStatus(201, c, m)
+	c, m = req(t, ts, "PATCH", "/api/releases/API-R1", map[string]any{"status": "active"})
+	mustStatus(200, c, m)
+	if res, _ := http.Get(ts.URL + "/p/API/dashboard"); res != nil {
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if !strings.Contains(string(body), "brokers sign in") || !strings.Contains(string(body), "in progress") {
+			t.Fatal("dashboard does not show the release in progress")
+		}
+	}
 	if res, _ := http.Get(ts.URL + "/api/releases/API-R1/notes"); res.StatusCode != 200 {
 		t.Fatalf("notes: %d", res.StatusCode)
 	}
