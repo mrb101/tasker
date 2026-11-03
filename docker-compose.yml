@@ -18,8 +18,15 @@ services:
       TASKER_NOTIFY_URL: ${TASKER_NOTIFY_URL:-}
       TASKER_NOTIFY_TOKEN: ${TASKER_NOTIFY_TOKEN:-}
       TASKER_PUBLIC_URL: ${TASKER_PUBLIC_URL:-}
+      # Backups: every 24h, newest 14 kept, unless set otherwise in .env.
+      TASKER_BACKUP_EVERY: ${TASKER_BACKUP_EVERY:-24h}
+      TASKER_BACKUP_KEEP: ${TASKER_BACKUP_KEEP:-14}
     volumes:
       - tasker-data:/data
+      # Backups live apart from the data: in their own volume by default, or in
+      # a folder on this machine when TASKER_BACKUP_HOST_DIR is an absolute path.
+      - ${TASKER_BACKUP_HOST_DIR:-tasker-backups}:/backups
 
 volumes:
   tasker-data:
+  tasker-backups:

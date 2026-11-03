@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -276,6 +277,11 @@ func (a *app) serveCmd() *cobra.Command {
 			hs := &http.Server{Addr: addr, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			backups, err := backupConfig(db)
+			if err != nil {
+				return err
+			}
+			srv.StartBackups(ctx, backups)
 			srv.StartNotifier(ctx, &server.Notifier{
 				URL: os.Getenv("TASKER_NOTIFY_URL"), Token: os.Getenv("TASKER_NOTIFY_TOKEN"), PublicURL: os.Getenv("TASKER_PUBLIC_URL"),
 			})
@@ -330,4 +336,32 @@ func (a *app) backupCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// backupConfig reads the backup schedule: TASKER_BACKUP_DIR (default: "backups"
+// next to the database), TASKER_BACKUP_EVERY (default 24h; 0 = manual only)
+// and TASKER_BACKUP_KEEP (default 14).
+func backupConfig(db string) (*server.Backups, error) {
+	b := &server.Backups{Dir: os.Getenv("TASKER_BACKUP_DIR"), Every: 24 * time.Hour, Keep: 14}
+	if b.Dir == "" {
+		b.Dir = filepath.Join(filepath.Dir(db), "backups")
+	}
+	if v := os.Getenv("TASKER_BACKUP_EVERY"); v != "" {
+		d, err := time.ParseDuration(v)
+		if v == "0" {
+			d, err = 0, nil
+		}
+		if err != nil || d < 0 {
+			return nil, fmt.Errorf("TASKER_BACKUP_EVERY must be a duration like 24h or 6h, or 0 (got %q)", v)
+		}
+		b.Every = d
+	}
+	if v := os.Getenv("TASKER_BACKUP_KEEP"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("TASKER_BACKUP_KEEP must be a number of backups, 1 or more (got %q)", v)
+		}
+		b.Keep = n
+	}
+	return b, nil
 }

@@ -28,6 +28,7 @@ type Server struct {
 	version string
 	pages   map[string]*template.Template
 	frags   *template.Template // fragments loaded into dialogs (no layout)
+	backups *Backups
 	assets  *assets
 }
 
@@ -61,6 +62,7 @@ func New(st *store.Store, version string) (*Server, error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.routesAPI(mux)
+	s.routesBackups(mux)
 	mux.HandleFunc("POST /mcp", s.mcp)
 	mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed) // no server-initiated stream
@@ -177,6 +179,15 @@ var funcs = template.FuncMap{
 	"neg":       func(a int) int { return -a },
 	"list":      func(v ...int) []int { return v },
 	"hours":     store.HumanHours,
+	"bytes": func(n int64) string {
+		switch {
+		case n >= 1<<20:
+			return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+		case n >= 1<<10:
+			return fmt.Sprintf("%d KB", n>>10)
+		}
+		return fmt.Sprintf("%d B", n)
+	},
 	// shortRef turns API-E12 into E12 (the project is already on screen).
 	"shortRef": func(ref string) string {
 		if i := strings.LastIndex(ref, "-"); i >= 0 {
@@ -479,7 +490,7 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			return
 		}
 		queues, _ := st.ListQueues(p.Key, true)
-		s.render(w, r, "settings", &Page{Title: p.Key + " settings", Tab: "settings", Project: p, D: map[string]any{"Queues": queues}})
+		s.render(w, r, "settings", &Page{Title: p.Key + " settings", Tab: "settings", Project: p, D: map[string]any{"Queues": queues, "Backups": s.backupStatus()}})
 	})
 
 	mux.HandleFunc("GET /q/{key}/{name}", func(w http.ResponseWriter, r *http.Request) {

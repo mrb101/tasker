@@ -115,10 +115,32 @@ Other devices then use `http://<tailscale-ip-or-name>:7777`, and their CLI uses 
 in `TASKER_URL`. **tasker has no login**: everyone who can reach that address can read and change
 everything, so only do this on a network you trust.
 
-## Data
+## Data and backups
 
-One SQLite file (`TASKER_DB`, `/data/tasker.db` in Docker). Consistent snapshot: `tasker backup out.db`
-or `GET /api/backup`. Export documents as markdown: `tasker doc pull -p API --out docs/tasker`.
+One SQLite file (`TASKER_DB`, `/data/tasker.db` in Docker). Export documents as markdown with
+`tasker doc pull -p API --out docs/tasker`.
+
+**Backups are automatic.** The server snapshots the database every 24 hours (and on start when the newest
+snapshot is older than that) and keeps the newest 14. Settings shows them, with a download link each and
+**Back up now**. In Docker they go to their own `tasker-backups` volume, apart from the data. Change it in `.env`:
+
+| Variable | Default | |
+|---|---|---|
+| `TASKER_BACKUP_EVERY` | `24h` | how often; `0` = only when you click Back up now |
+| `TASKER_BACKUP_KEEP` | `14` | how many to keep |
+| `TASKER_BACKUP_HOST_DIR` | the `tasker-backups` volume | an absolute folder on this machine instead (it must be writable by uid 65532: `docker run --rm -v /path/to/folder:/b alpine chown 65532:65532 /b`) |
+
+Outside Docker the default folder is `backups/` next to the database (`TASKER_BACKUP_DIR` changes it).
+A snapshot of the moment is always one command away: `tasker backup out.db`.
+
+**To restore**, stop tasker, put the snapshot in place of the database, and start it again:
+
+```sh
+docker compose stop
+docker run --rm -v tasker_tasker-data:/data -v tasker_tasker-backups:/backups alpine \
+  sh -c 'rm -f /data/tasker.db-wal /data/tasker.db-shm && cp /backups/tasker-20261103-020000.db /data/tasker.db && chown 65532:65532 /data/tasker.db'
+docker compose start
+```
 
 ## Troubleshooting
 

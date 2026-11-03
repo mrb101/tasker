@@ -6,13 +6,14 @@ RUN go mod download
 COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/tasker ./cmd/tasker \
- && mkdir -p /out/data
+ && mkdir -p /out/data /out/backups
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/tasker /usr/local/bin/tasker
 COPY --from=build --chown=nonroot:nonroot /out/data /data
-ENV TASKER_DB=/data/tasker.db TASKER_ADDR=:7777 TASKER_URL=http://localhost:7777
-VOLUME ["/data"]
+COPY --from=build --chown=nonroot:nonroot /out/backups /backups
+ENV TASKER_DB=/data/tasker.db TASKER_ADDR=:7777 TASKER_URL=http://localhost:7777 TASKER_BACKUP_DIR=/backups
+VOLUME ["/data", "/backups"]
 EXPOSE 7777
 HEALTHCHECK --interval=30s --timeout=3s CMD ["tasker", "healthcheck"]
 ENTRYPOINT ["tasker"]

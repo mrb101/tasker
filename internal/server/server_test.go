@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,5 +177,61 @@ func TestNotifierSendsToNtfy(t *testing.T) {
 	case g := <-recv:
 		t.Fatalf("unexpected extra notification %+v", g)
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestBackups(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	st.CreateProject("me", "API", "", "")
+	srv, _ := New(st, "test")
+	bdir := filepath.Join(dir, "backups")
+	os.MkdirAll(bdir, 0o755)
+	// three older backups already there
+	for _, n := range []string{"tasker-20260101-000000.db", "tasker-20260102-000000.db", "tasker-20260103-000000.db"} {
+		os.WriteFile(filepath.Join(bdir, n), []byte("old"), 0o644)
+	}
+	os.WriteFile(filepath.Join(bdir, "notes.txt"), []byte("not a backup"), 0o644)
+	srv.StartBackups(context.Background(), &Backups{Dir: bdir, Keep: 2}) // Every 0: manual only
+	f, err := srv.BackupNow()
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := srv.backups.List()
+	if len(list) != 2 || list[0].Name != f.Name || list[1].Name != "tasker-20260103-000000.db" {
+		t.Fatalf("kept %+v", list)
+	}
+	if _, err := os.Stat(filepath.Join(bdir, "notes.txt")); err != nil {
+		t.Fatal("pruning removed a file that is not a backup")
+	}
+	// the snapshot is a working database
+	copyDB, err := store.Open(filepath.Join(bdir, f.Name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := copyDB.GetProject("API"); err != nil || p.Key != "API" {
+		t.Fatalf("backup unreadable: %v", err)
+	}
+	copyDB.Close()
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	for path, want := range map[string]int{"/api/backups/" + f.Name: 200, "/api/backups/notes.txt": 404, "/api/backups/..%2Ft.db": 404} {
+		res, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != want {
+			t.Fatalf("%s: %d, want %d", path, res.StatusCode, want)
+		}
+	}
+	c, m := req(t, ts, "POST", "/api/backups", nil)
+	if c != 201 || m["name"] == nil {
+		t.Fatalf("backup now: %d %v", c, m)
 	}
 }
