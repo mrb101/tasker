@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/mrb101/tasker/internal/store"
 )
@@ -68,7 +69,8 @@ func addReleases(st *store.Store, p *store.Project, view map[string]any) error {
 	if err != nil {
 		return err
 	}
-	var upcoming []*store.Release
+	var upcoming, onTimeline []*store.Release
+	shippedShown := 0
 	for _, r := range list {
 		switch r.Status {
 		case "active":
@@ -76,17 +78,28 @@ func addReleases(st *store.Store, p *store.Project, view map[string]any) error {
 			if err != nil {
 				return err
 			}
+			onTimeline = append(onTimeline, full)
 			verdict, reason := full.Health(p.ReleaseMode)
 			view["Rel"], view["RelVerdict"], view["RelReason"], view["RelDaysLeft"] = full, verdict, reason, full.DaysLeft()
 		case "planned":
 			upcoming = append(upcoming, r)
+			full, err := st.GetRelease(r.Ref) // its forecast places it on the timeline
+			if err != nil {
+				return err
+			}
+			onTimeline = append(onTimeline, full)
 		case "shipped":
+			if shippedShown < 2 {
+				onTimeline = append(onTimeline, r)
+				shippedShown++
+			}
 			if view["LastShipped"] == nil { // listed newest first
 				view["LastShipped"] = r
 			}
 		}
 	}
 	view["Upcoming"] = upcoming
+	view["Timeline"] = releaseTimeline(onTimeline, time.Now())
 	view["HasReleases"] = len(list) > 0
 	return nil
 }

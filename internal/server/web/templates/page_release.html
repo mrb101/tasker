@@ -52,6 +52,7 @@
           {{else if eq .Remaining 0}}<p>Everything planned is done.</p>
           {{else if .Date50}}
             <p class="big">All <b>{{.Remaining}}</b> open stories are done by <b>{{.Date50}}</b> at even odds, and by <b>{{.Date85}}</b> with 85% confidence.</p>
+            {{if .Ahead}}<p class="muted small">That includes the {{.Ahead}} open stories of the releases worked before this one.</p>{{end}}
           {{else}}
             <p class="big">By <b>{{$r.TargetOn}}</b>: <b>{{.Likely85}}</b> more stories with 85% confidence, <b>{{.Likely50}}</b> at even odds — of <b>{{.Remaining}}</b> still open.</p>
             {{if lt .Likely85 .Remaining}}<p>{{if lt .Likely85 $r.Committed}}<b>The commitments do not fit.</b> Move some to stretch or to the next release, or the date will ship without them.{{else}}The commitments fit; the stretch goals are the ones at stake.{{end}}</p>{{end}}

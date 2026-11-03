@@ -108,6 +108,12 @@ from a story's page, or a whole epic at once from the release page. The release 
   when the plan gate is on;
 - a burn-up of the release's scope against done, its scope history, and **release notes** grouped by epic.
 
+The **timeline** on the Releases page (and in the dashboard's Releases section) puts every release on one
+calendar: a bar from start to target, or to the day it shipped, filled by what is done; target ticks; a line
+for today; and the likely-finish range (even odds to 85% sure). Releases without a target date are worked one
+after another, so each one's forecast counts the open stories of the releases before it, and its dashed
+*expected* bar starts when the one before is likely done — a roadmap that moves as work lands.
+
 **Ship** records the git tag and moves unfinished stories to the next planned release (or one you choose). One
 release is in progress at a time, and `tasker next -p KEY` prefers its stories. On the command line:
 `tasker release create|list|show|start|ship|notes|add|add-epic|remove`. (Giving up a claim on a story is

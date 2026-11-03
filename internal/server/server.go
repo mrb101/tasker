@@ -515,8 +515,15 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			}
 			current = append(current, full)
 		}
+		onTimeline := append([]*store.Release{}, current...)
+		for i, rel := range shipped { // the last few shipped, for context
+			if i == 4 {
+				break
+			}
+			onTimeline = append(onTimeline, rel)
+		}
 		s.render(w, r, "releases", &Page{Title: p.Key + " releases", Tab: "releases", Project: p, D: map[string]any{
-			"Current": current, "Shipped": shipped,
+			"Current": current, "Shipped": shipped, "Timeline": releaseTimeline(onTimeline, time.Now()),
 		}})
 	})
 

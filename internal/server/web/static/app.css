@@ -528,3 +528,41 @@ tr.isdone td { opacity: .6; }
 .rel-others { display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
 .rel-chip { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
 .rel-chip:hover { border-color: var(--accent); color: inherit; }
+
+/* ---- release timeline ---- */
+.tl-panel h2 { margin: 0 0 10px; font-size: 15px; }
+.tl { display: flex; flex-direction: column; gap: 2px; }
+.tl-row { display: grid; grid-template-columns: minmax(150px, 22%) minmax(0, 1fr); gap: 12px; align-items: center; min-height: 30px; }
+.tl-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-label a:hover b { color: var(--accent); }
+.tl-track { position: relative; height: 22px; }
+.tl-axisrow { min-height: 20px; }
+.tl-axis { height: 18px; }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tl-todaylabel { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: var(--text); background: var(--panel); padding: 0 3px; }
+.tl-grid { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--chart-grid); }
+.tl-today { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); opacity: .55; pointer-events: none; }
+.tl-bar { position: absolute; top: 4px; height: 14px; border-radius: 4px; overflow: hidden; min-width: 4px; background: var(--line-2); }
+.tl-bar.st-active { background: color-mix(in srgb, var(--series-1) 28%, var(--panel)); }
+.tl-bar.st-planned { background: transparent; box-shadow: inset 0 0 0 1.5px var(--series-1); }
+.tl-bar.st-shipped { background: var(--line-2); }
+.tl-bar .tl-done { display: block; height: 100%; background: var(--series-1); }
+.tl-bar.st-shipped .tl-done { background: var(--muted); }
+.tl-bar.st-planned .tl-done { background: color-mix(in srgb, var(--series-1) 45%, transparent); }
+.tl-bar:hover, .tl-bar:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tl-target { position: absolute; top: 1px; height: 20px; width: 2px; margin-left: -1px; background: var(--series-1); border-radius: 1px; }
+.tl-range { position: absolute; top: 9px; height: 4px; min-width: 6px; }
+.tl-range i { position: absolute; left: 0; right: 0; top: 1px; height: 2px; background: var(--series-2); border-radius: 1px; }
+.tl-range::before, .tl-range::after { content: ""; position: absolute; top: -3px; width: 2px; height: 10px; background: var(--series-2); }
+.tl-range::before { left: 0; } .tl-range::after { right: 0; }
+.tl-range:hover i, .tl-range:focus i { height: 4px; top: 0; }
+.tl-open { position: absolute; top: 3px; font-size: 11px; color: var(--muted); border: 1px dashed var(--line-2); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.tl-legend { margin-top: 8px; }
+.tl-k-done { background: var(--series-1); }
+.tl-k-rest { background: color-mix(in srgb, var(--series-1) 28%, var(--panel)); }
+.tl-k-planned { background: transparent; box-shadow: inset 0 0 0 1.5px var(--series-1); }
+.tl-k-range { background: var(--series-2); }
+.tl-k-today { background: var(--text); opacity: .55; }
+.tl-dash { border-top: 1px solid var(--line); padding-top: 10px; }
+.tl-bar.st-expected { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--series-1) 22%, var(--panel)) 0 4px, transparent 4px 8px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--series-1) 60%, transparent); }
+.tl-k-expected { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--series-1) 40%, var(--panel)) 0 2px, transparent 2px 4px); box-shadow: inset 0 0 0 1px var(--series-1); }

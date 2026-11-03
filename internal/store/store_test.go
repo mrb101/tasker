@@ -433,3 +433,40 @@ func TestReleaseHealth(t *testing.T) {
 		t.Fatalf("no history: %q %q", v, why)
 	}
 }
+
+func TestScopeReleasesQueueUp(t *testing.T) {
+	s := newStore(t)
+	scope := "scope"
+	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
+	for w := 1; w <= 4; w++ { // five stories a week
+		for i := 0; i < 5; i++ {
+			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
+			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339), it.ID)
+		}
+	}
+	start := time.Now().UTC().Format(dateLayout)
+	var rels []*Release
+	for i := 0; i < 3; i++ {
+		r := must(s.CreateRelease("me", "API", ReleaseInput{StartsOn: start}))
+		ref := r.Ref
+		var refs []string
+		for j := 0; j < 10; j++ {
+			refs = append(refs, must(s.CreateItem("me", "API", ItemInput{Title: "t"})).Ref)
+		}
+		must(s.BulkUpdate("me", "API", refs, ItemPatch{Release: &ref}))
+		rels = append(rels, r)
+	}
+	active := "active"
+	must(s.UpdateRelease("me", rels[0].Ref, ReleasePatch{Status: &active}))
+	var prev string
+	for i, r := range rels {
+		f := must(s.GetRelease(r.Ref)).Forecast
+		if f.Ahead != 10*i {
+			t.Fatalf("%s ahead %d, want %d", r.Ref, f.Ahead, 10*i)
+		}
+		if f.Date50 <= prev {
+			t.Fatalf("%s finishes %s, not after the release before it (%s)", r.Ref, f.Date50, prev)
+		}
+		prev = f.Date50
+	}
+}

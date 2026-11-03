@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -250,5 +252,32 @@ func TestBackups(t *testing.T) {
 	c, m := req(t, ts, "POST", "/api/backups", nil)
 	if c != 201 || m["name"] == nil {
 		t.Fatalf("backup now: %d %v", c, m)
+	}
+}
+
+func TestReleaseTimeline(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	rels := []*store.Release{
+		{Ref: "API-R1", Name: "0.8", Status: "shipped", StartsOn: "2026-10-01", TargetOn: "2026-10-28", ShippedAt: "2026-10-29T10:00:00Z", Total: 20, Done: 18},
+		{Ref: "API-R2", Name: "0.9", Status: "active", StartsOn: "2026-10-29", TargetOn: "2026-11-25", Total: 30, Done: 12,
+			Forecast: &store.Forecast{Enough: true, Remaining: 18, Likely85: 15, Likely50: 21}},
+		{Ref: "API-R3", Name: "1.0", Status: "planned", StartsOn: "2026-11-26", CreatedAt: "2026-11-01T00:00:00Z",
+			Forecast: &store.Forecast{Enough: true, Remaining: 9, Date50: "2026-12-20", Date85: "2027-01-08"}},
+		{Ref: "API-R4", Name: "1.1", Status: "planned", StartsOn: "2026-11-30", Total: 0},
+	}
+	h := string(releaseTimeline(rels, now))
+	for _, want := range []string{`tl-bar st-shipped`, `tl-bar st-active`, `tl-bar st-expected`, `>no target<`, `tl-range`, `tl-today`, `href="/rel/API-R3"`, "by the target: 15 more 85% sure"} {
+		if !strings.Contains(h, want) {
+			t.Fatalf("missing %q", want)
+		}
+	}
+	// every position stays on the track
+	for _, m := range regexp.MustCompile(`left:(-?[\d.]+)%`).FindAllStringSubmatch(h, -1) {
+		if v, _ := strconv.ParseFloat(m[1], 64); v < 0 || v > 100 {
+			t.Fatalf("mark off the track at %s%%", m[1])
+		}
+	}
+	if releaseTimeline(nil, now) != "" {
+		t.Fatal("empty timeline should render nothing")
 	}
 }

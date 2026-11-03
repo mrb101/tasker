@@ -51,6 +51,7 @@ type Forecast struct {
 	Samples   []int   `json:"weekly_done"` // the weeks it draws from, oldest first
 	Dropped   []int   `json:"dropped"`     // weeks left out as outliers (bulk closes, imports)
 	Remaining int     `json:"remaining"`
+	Ahead     int     `json:"ahead,omitempty"` // scope mode: open stories in releases worked before this one
 	WeeksLeft float64 `json:"weeks_left,omitempty"`
 	// date mode: at least this many more stories are done by the target, with that confidence
 	Likely85 int `json:"likely_85,omitempty"`
@@ -469,7 +470,13 @@ func (s *Store) GetRelease(ref string) (*Release, error) {
 		if err != nil {
 			return nil, err
 		}
-		r.Forecast, r.Outlook = forecast(pr.ReleaseMode, r, open, samples, dropped)
+		ahead := 0
+		if pr.ReleaseMode == "scope" || r.TargetOn == "" {
+			if ahead, err = s.openAhead(r); err != nil {
+				return nil, err
+			}
+		}
+		r.Forecast, r.Outlook = forecast(pr.ReleaseMode, r, open, ahead, samples, dropped)
 		if r.Risks, err = s.releaseRisks(pr, r, open); err != nil {
 			return nil, err
 		}
@@ -580,8 +587,11 @@ const trials = 4000
 
 // forecast simulates the coming weeks by drawing each week's throughput from
 // the samples. It assumes the project's work goes to this release.
-func forecast(mode string, r *Release, open []*Item, samples, dropped []int) (*Forecast, map[string]string) {
-	f := &Forecast{Mode: mode, Samples: samples, Dropped: dropped, Remaining: len(open)}
+//
+// Releases without a fixed date are worked one after another, so a release's
+// finish date also waits for `ahead`: the open stories of the releases before it.
+func forecast(mode string, r *Release, open []*Item, ahead int, samples, dropped []int) (*Forecast, map[string]string) {
+	f := &Forecast{Mode: mode, Samples: samples, Dropped: dropped, Remaining: len(open), Ahead: ahead}
 	nonzero := 0
 	for _, s := range samples {
 		if s > 0 {
@@ -601,7 +611,7 @@ func forecast(mode string, r *Release, open []*Item, samples, dropped []int) (*F
 		weeks := make([]int, trials)
 		for i := range weeks {
 			done, w := 0, 0
-			for done < len(open) && w < 520 {
+			for done < ahead+len(open) && w < 520 {
 				done += draw()
 				w++
 			}
@@ -858,4 +868,18 @@ func (r *Release) DaysLeft() int {
 	}
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	return int(t.Sub(today).Hours() / 24)
+}
+
+// openAhead counts the open stories of the releases worked before r: the one in
+// progress (unless r is it), then planned ones by start date and number.
+func (s *Store) openAhead(r *Release) (int, error) {
+	if r.Status == "active" || r.Status == "shipped" {
+		return 0, nil
+	}
+	var n int
+	err := s.db.QueryRow(`SELECT count(*) FROM items i JOIN releases o ON o.id = i.release_id
+		WHERE o.project_id = ? AND o.id != ? AND i.status NOT IN ('done','cancelled')
+		AND (o.status = 'active' OR (o.status = 'planned' AND (o.starts_on < ? OR (o.starts_on = ? AND o.number < ?))))`,
+		r.ProjectID, r.ID, r.StartsOn, r.StartsOn, r.Number).Scan(&n)
+	return n, err
 }

@@ -23,6 +23,8 @@
     <div class="span2 row end"><button class="btn primary">Plan release</button></div>
   </form>
 
+  {{if .D.Timeline}}<section class="panel tl-panel"><h2>Timeline</h2>{{.D.Timeline}}</section>{{end}}
+
   {{range .D.Current}}
   <a class="relcard {{if eq .Status "active"}}active{{end}}" href="/rel/{{.Ref}}">
     <div class="row">

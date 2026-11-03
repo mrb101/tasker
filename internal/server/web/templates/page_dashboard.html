@@ -69,6 +69,7 @@
     {{else}}
     <p class="empty">{{if $v.HasReleases}}No release is in progress. Start one from <a href="/p/{{$p.Key}}/releases">Releases</a>.{{else}}No releases planned yet. <a href="/p/{{$p.Key}}/releases">Plan the first one</a>: a goal, and the stories that reach it.{{end}}</p>
     {{end}}
+    {{if $v.Timeline}}<div class="tl-dash">{{$v.Timeline}}</div>{{end}}
     {{if or $v.Upcoming $v.LastShipped}}
     <div class="rel-others">
       {{range $v.Upcoming}}<a class="rel-chip" href="/rel/{{.Ref}}"><span class="muted">next</span> <b>{{.Name}}</b> <span class="muted">{{if .StartsOn}}{{.StartsOn}}{{end}}{{if .TargetOn}} → {{.TargetOn}}{{end}} · {{.Total}} stories</span></a>{{end}}
