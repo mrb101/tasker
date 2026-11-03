@@ -88,6 +88,19 @@ Errors are `{"error": "...", "kind": "not_found|conflict|invalid"}` with 404/409
 Writes need `Content-Type: application/json`; cross-origin writes are refused (there is no auth, keep it on localhost).
 Optimistic concurrency: `if_version` on items, `if_revision` on documents.
 
+## Notifications
+
+tasker tells you when something waits on you: a document submitted for review (usually a plan an agent
+is blocked on) or a story finished into review (a pull request waiting to merge).
+
+- **In the browser:** click **Notify me** at the bottom of the sidebar and allow notifications. Any open
+  tasker tab then shows a system notification; when the tab is in front you get a message on the page.
+- **On your phone, with no tab open:** set `TASKER_NOTIFY_URL` to an [ntfy](https://ntfy.sh) topic (and
+  `TASKER_PUBLIC_URL` so tapping it opens the page) in `.env`, subscribe to that topic in the ntfy app,
+  and restart. See `.env.example`. Any URL that accepts a plain-text POST works as well.
+
+You are not notified about your own actions.
+
 ## Reach it from other devices
 
 tasker listens on localhost only. To also listen on another address, such as this machine's

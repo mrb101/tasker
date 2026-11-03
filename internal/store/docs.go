@@ -586,6 +586,11 @@ func (s *Store) addCommentTx(t *txc, projectID int64, projectKey, kind string, i
 	if ckind == "comment" {
 		return t.log(projectID, projectKey, ref, "comment.added", firstLine(body, 80))
 	}
+	if ckind == "submit" && kind == KindDoc { // every way into review passes here
+		var title string
+		t.QueryRow(`SELECT title FROM documents WHERE id = ?`, id).Scan(&title)
+		t.notify(projectKey, ref, title, EventReviewRequested)
+	}
 	return nil
 }
 

@@ -115,7 +115,7 @@ h3 { font-size: 13px; margin: 18px 0 8px; color: var(--muted); text-transform: u
 .navlinks .chip { align-self: flex-start; margin: 4px 8px; }
 .navlinks .sep { height: 1px; background: var(--line); margin: 8px 4px; }
 .badge { margin-left: auto; background: var(--violet); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 11px; line-height: 18px; font-weight: 600; }
-.side-foot { margin-top: auto; padding: 4px; }
+.side-foot { margin-top: auto; padding: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .actor { background: none; border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px; color: var(--muted); cursor: pointer; font: inherit; font-size: 12.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actor::before { content: "● "; color: var(--ok); }
 .actor-input { width: 100%; }
@@ -488,3 +488,8 @@ td.selcol input, th.selcol input { accent-color: var(--accent); cursor: pointer;
 
 body:has(#bulkbar:not([hidden])) #toast { bottom: 96px; }
 body:has(#bulkbar:not([hidden])) #live { bottom: 96px; }
+
+.notifybtn { background: none; border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px; color: var(--muted); cursor: pointer; font: inherit; font-size: 12.5px; }
+.notifybtn::before { content: "🔕 "; }
+.notifybtn.on { color: var(--text); border-color: var(--accent); }
+.notifybtn.on::before { content: "🔔 "; }

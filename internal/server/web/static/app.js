@@ -24,13 +24,13 @@
   }
 
   let toastTimer;
-  function toast(msg, err) {
+  function toast(msg, err, ms) {
     const t = $('#toast');
     t.textContent = msg;
     t.className = err ? 'err' : '';
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (t.hidden = true), err ? 6000 : 1800);
+    toastTimer = setTimeout(() => (t.hidden = true), ms || (err ? 6000 : 1800));
   }
 
   function fieldValue(el) {
@@ -364,6 +364,54 @@
     if (e.key === 'Escape' && sel.length && !$('#peek').open) { sel.length = 0; syncSelection(); }
   });
 
+  // ---- notifications: something now waits on you ----
+  const NOTIFY_KEY = 'tasker_notify';
+  const notifyOn = () => { try { return localStorage.getItem(NOTIFY_KEY) === '1'; } catch (_) { return false; } };
+  const NOTICE = {
+    'review.requested': (e) => ({ title: `Review: ${e.ref}`, body: `${e.title || ''}\nsubmitted by ${e.actor}`, url: `/d/${e.ref}` }),
+    'item.review': (e) => ({ title: `Ready to merge: ${e.ref}`, body: `${e.title || ''}\nfinished by ${e.actor}`, url: `/i/${e.ref}` }),
+  };
+
+  function notifyAbout(e) {
+    const make = NOTICE[e.action];
+    if (!make || !notifyOn() || e.actor === actor()) return;
+    const n = make(e);
+    if (document.visibilityState === 'visible' && document.hasFocus()) {
+      toast(`${n.title} — ${(e.title || '').slice(0, 60)}`, false, 8000);
+      return;
+    }
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    // The same tag from several open tabs collapses into one notification.
+    const note = new Notification(n.title, { body: n.body, tag: e.action + ':' + e.ref });
+    note.onclick = () => { window.focus(); location.href = n.url; note.close(); };
+  }
+
+  function paintBell() {
+    const b = $('#notifybtn');
+    if (!b) return;
+    const on = notifyOn() && (!('Notification' in window) || Notification.permission === 'granted');
+    b.classList.toggle('on', on);
+    b.textContent = on ? 'Notifications on' : 'Notify me';
+    b.title = on ? 'You are told when a review or a merge waits on you. Click to turn off.'
+      : 'Tell me when a plan waits for review or work waits to merge';
+  }
+
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#notifybtn')) return;
+    if (notifyOn()) {
+      try { localStorage.setItem(NOTIFY_KEY, '0'); } catch (_) {}
+      paintBell();
+      return;
+    }
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') { toast('The browser blocked notifications for this site; allow them in its site settings.', true); return; }
+    }
+    try { localStorage.setItem(NOTIFY_KEY, '1'); } catch (_) {}
+    paintBell();
+    toast('You will be told when a review or a merge waits on you.');
+  });
+
   // ---- sidebar: mobile toggle, close the project switcher on outside click ----
   document.addEventListener('click', (e) => {
     if (e.target.closest('#navtoggle')) { $('#sidenav').classList.toggle('open'); return; }
@@ -541,6 +589,7 @@
     const onEvent = (data) => {
       try {
         const e = JSON.parse(data);
+        notifyAbout(e); // from any project: it waits on you wherever you are
         if (project() && e.project !== project()) return;
       } catch (_) { /* ignore malformed */ }
       onChange();
@@ -571,6 +620,7 @@
   document.addEventListener('click', (e) => { if (e.target.closest('#live')) refresh(); });
 
   function afterRender() {
+    paintBell();
     applyFilter();
     syncSelection();
     if (window.mermaid && $('.mermaid')) {

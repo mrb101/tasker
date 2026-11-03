@@ -13,6 +13,11 @@ services:
       # interface. tasker has no login: everyone who can reach the address can
       # read and change everything.
       - "${TASKER_EXTRA_BIND_ADDRESS:-127.0.0.1}:7777:7777"
+    environment:
+      # Optional push notifications (see .env.example). Empty means off.
+      TASKER_NOTIFY_URL: ${TASKER_NOTIFY_URL:-}
+      TASKER_NOTIFY_TOKEN: ${TASKER_NOTIFY_TOKEN:-}
+      TASKER_PUBLIC_URL: ${TASKER_PUBLIC_URL:-}
     volumes:
       - tasker-data:/data
 

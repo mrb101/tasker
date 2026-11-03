@@ -172,6 +172,9 @@ func (s *Store) Finish(actor, ref string, in FinishInput) (*Item, error) {
 				return err
 			}
 		}
+		if in.Status == "review" {
+			t.notify(it.Project, it.Ref, it.Title, EventItemInReview)
+		}
 		return t.log(it.ProjectID, it.Project, it.Ref, "item.finished", in.Status)
 	})
 	if err != nil {

@@ -276,6 +276,9 @@ func (a *app) serveCmd() *cobra.Command {
 			hs := &http.Server{Addr: addr, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			srv.StartNotifier(ctx, &server.Notifier{
+				URL: os.Getenv("TASKER_NOTIFY_URL"), Token: os.Getenv("TASKER_NOTIFY_TOKEN"), PublicURL: os.Getenv("TASKER_PUBLIC_URL"),
+			})
 			go func() {
 				<-ctx.Done()
 				sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

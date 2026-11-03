@@ -18,7 +18,14 @@ type Event struct {
 	Ref     string `json:"ref"`
 	Action  string `json:"action"`
 	Actor   string `json:"actor"`
+	Title   string `json:"title,omitempty"` // set on events people are notified about
 }
+
+// Events that mean something now waits on a person.
+const (
+	EventReviewRequested = "review.requested" // a document was submitted for review
+	EventItemInReview    = "item.review"      // a story was finished into review (a PR waits)
+)
 
 type Store struct {
 	db *sql.DB
@@ -151,6 +158,11 @@ func (s *Store) write(actor string, fn func(t *txc) error) error {
 }
 
 // log records an activity entry and queues a live event.
+// notify queues an event that something now waits on a person; it is not logged as activity.
+func (t *txc) notify(projectKey, ref, title, action string) {
+	t.events = append(t.events, Event{Project: projectKey, Ref: ref, Action: action, Actor: t.actor, Title: title})
+}
+
 func (t *txc) log(projectID int64, projectKey, ref, action, detail string) error {
 	_, err := t.Exec(`INSERT INTO activity(project_id, ref, actor, action, detail, created_at) VALUES(?,?,?,?,?,?)`,
 		projectID, ref, t.actor, action, detail, now())

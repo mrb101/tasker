@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrb101/tasker/internal/store"
 )
@@ -124,5 +126,55 @@ func TestAPIFlowAndPages(t *testing.T) {
 				t.Fatal("reference not linked")
 			}
 		}
+	}
+}
+
+func TestNotifierSendsToNtfy(t *testing.T) {
+	type got struct{ title, click, body string }
+	recv := make(chan got, 4)
+	ntfy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		recv <- got{r.Header.Get("Title"), r.Header.Get("Click"), string(b)}
+	}))
+	defer ntfy.Close()
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv, err := New(st, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv.StartNotifier(ctx, &Notifier{URL: ntfy.URL + "/topic", PublicURL: "http://tasker.example:7777"})
+
+	st.CreateProject("me", "API", "", "")
+	if _, err := st.CreateDoc("planner", "API", store.DocInput{Type: "plan", Title: "Rate limits", Submit: true}); err != nil {
+		t.Fatal(err)
+	}
+	it, _ := st.CreateItem("me", "API", store.ItemInput{Title: "Lockout"})
+	st.UpdateItem("me", it.Ref, store.ItemPatch{}) // not a notification
+	st.Finish("bot", it.Ref, store.FinishInput{Status: "review"})
+
+	for _, want := range []got{
+		{"Review: API-D1", "http://tasker.example:7777/d/API-D1", "Rate limits\nsubmitted by planner"},
+		{"Ready to merge: API-1", "http://tasker.example:7777/i/API-1", "Lockout\nfinished by bot"},
+	} {
+		select {
+		case g := <-recv:
+			if g.title != want.title || g.click != want.click || !strings.HasPrefix(g.body, want.body) {
+				t.Fatalf("got %+v, want %+v", g, want)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("no notification for %s", want.title)
+		}
+	}
+	select {
+	case g := <-recv:
+		t.Fatalf("unexpected extra notification %+v", g)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
