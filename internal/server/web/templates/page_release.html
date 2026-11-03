@@ -1,0 +1,120 @@
+{{define "content"}}
+{{$r := .D.R}}{{$p := .Project}}
+<div class="page detail">
+  <div class="crumbs"><a href="/p/{{$p.Key}}/releases">{{$p.Key}} releases</a> /</div>
+  <div class="head">
+    <div class="grow">
+      <div class="row"><span class="ref big">{{$r.Ref}}</span>
+        <span class="status s-{{if eq $r.Status "active"}}active{{else if eq $r.Status "shipped"}}done{{else}}queued{{end}}">{{if eq $r.Status "active"}}in progress{{else}}{{$r.Status}}{{end}}</span>
+        {{if $r.Tag}}<code>{{$r.Tag}}</code>{{end}}
+      </div>
+      <h1 class="title" data-toggle="#reledit" title="Click to edit">{{$r.Name}}</h1>
+      <p class="relgoal big">{{if $r.Goal}}{{$r.Goal}}{{else}}<span class="muted">No goal yet — <a href="#" data-toggle="#reledit">say what someone can do once it ships</a>.</span>{{end}}</p>
+      <p class="muted small">{{if $r.StartsOn}}{{$r.StartsOn}}{{end}}{{if $r.TargetOn}} → {{$r.TargetOn}}{{end}}{{if $r.ShippedAt}} · shipped {{date $r.ShippedAt}}{{end}}
+        · {{$r.Done}}/{{$r.Total}} done · {{$r.Committed}} committed and {{$r.Stretch}} stretch still open</p>
+    </div>
+    <div class="row">
+      {{if eq $r.Status "planned"}}<button class="btn" data-api="PATCH /api/releases/{{$r.Ref}}" data-body='{"status":"active"}'>Start</button>{{end}}
+      {{if ne $r.Status "shipped"}}<button class="btn primary" data-toggle="#shipform">Ship…</button>{{end}}
+    </div>
+  </div>
+
+  <form id="reledit" class="panel form-grid" data-api="PATCH /api/releases/{{$r.Ref}}" data-then="reload" hidden>
+    <label>Name or version <input name="name" value="{{$r.Name}}"></label>
+    <label>Tag <input name="tag" value="{{$r.Tag}}" placeholder="v1.4.0"></label>
+    <label class="span2">Goal <input name="goal" value="{{$r.Goal}}"></label>
+    <label>Starts <input type="date" name="starts_on" value="{{$r.StartsOn}}"></label>
+    <label>Target <input type="date" name="target_on" value="{{$r.TargetOn}}"></label>
+    <div class="span2 row">
+      <button type="button" class="btn danger small" data-api="DELETE /api/releases/{{$r.Ref}}" data-confirm="Delete {{$r.Ref}}? Its stories stay, outside any release." data-then="goto:/p/{{$p.Key}}/releases">Delete release</button>
+      <span class="grow"></span><button type="button" class="btn" data-toggle="#reledit">Cancel</button><button class="btn primary">Save</button>
+    </div>
+  </form>
+
+  <form id="shipform" class="panel form-grid" data-api="POST /api/releases/{{$r.Ref}}/ship" data-then="reload" hidden>
+    <label>Git tag <input name="tag" value="{{$r.Tag}}" placeholder="v1.4.0"></label>
+    <label>Unfinished stories ({{add $r.Committed $r.Stretch}}) go to
+      <select name="move_to">
+        <option value="">the next planned release{{with .D.Later}} ({{(index . 0).Name}}){{end}}</option>
+        {{range .D.Later}}<option value="{{.Ref}}">{{.Name}}</option>{{end}}
+        <option value="none">no release</option>
+      </select></label>
+    <div class="span2 row end"><button class="btn primary">Ship {{$r.Name}}</button></div>
+  </form>
+
+  <div class="split">
+    <div class="maincol">
+      {{if ne $r.Status "shipped"}}
+      <section class="panel forecast-panel">
+        <h2>Forecast</h2>
+        {{if eq $r.Total 0}}<p class="muted">Nothing planned into this release yet.</p>{{else}}{{with $r.Forecast}}
+          {{if not .Enough}}<p class="muted">Not enough finished work yet to forecast from: tasker needs at least two weeks in which stories were finished.</p>
+          {{else if eq .Remaining 0}}<p>Everything planned is done.</p>
+          {{else if .Date50}}
+            <p class="big">All <b>{{.Remaining}}</b> open stories are done by <b>{{.Date50}}</b> at even odds, and by <b>{{.Date85}}</b> with 85% confidence.</p>
+          {{else}}
+            <p class="big">By <b>{{$r.TargetOn}}</b>: <b>{{.Likely85}}</b> more stories with 85% confidence, <b>{{.Likely50}}</b> at even odds — of <b>{{.Remaining}}</b> still open.</p>
+            {{if lt .Likely85 .Remaining}}<p>{{if lt .Likely85 $r.Committed}}<b>The commitments do not fit.</b> Move some to stretch or to the next release, or the date will ship without them.{{else}}The commitments fit; the stretch goals are the ones at stake.{{end}}</p>{{end}}
+          {{end}}
+          {{if .Enough}}<p class="muted small">Simulated 4,000 times from stories finished per week over the last {{len .Samples}} weeks ({{range $i, $v := .Samples}}{{if $i}}, {{end}}{{$v}}{{end}}){{if .Dropped}}, leaving out {{range $i, $v := .Dropped}}{{if $i}}, {{end}}{{$v}}{{end}} as one-off bulk closes{{end}}. It assumes the project's work goes to this release.</p>{{end}}
+        {{end}}{{end}}
+      </section>
+      {{end}}
+
+      {{if .D.Burnup}}
+      <section class="panel chart-card">
+        <header><h2>Scope and done</h2><p class="muted small">Stories in the release, and how many are done, at the end of each week. A rising scope line is the release growing.</p></header>
+        {{.D.BurnLegend}}{{.D.Burnup}}
+      </section>
+      {{end}}
+
+      {{if $r.Risks}}
+      <h2>At risk</h2>
+      <div class="panel risks">
+        {{range $r.Risks}}<div class="dep"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis" title="{{.Title}}">{{.Title}}</span><span class="muted small">{{.Reason}}</span></div>{{end}}
+      </div>
+      {{end}}
+
+      <h2>Stories <span class="count">{{$r.Total}}</span></h2>
+      <p class="muted small">In the order they will likely be worked: in progress, then commitments, then queue order, then priority. Tick stories and use the bar to change many at once.</p>
+      {{if $r.Items}}
+      <div class="tablewrap"><table class="list">
+        <thead><tr><th class="selcol"><input type="checkbox" class="selall" data-selall aria-label="Select all rows"></th><th>Story</th><th>Status</th><th>Plan</th>{{if ne $r.Status "shipped"}}<th>Outlook</th>{{end}}<th>Epic</th><th>Queue</th></tr></thead>
+        <tbody>{{range $r.Items}}
+          <tr class="{{if closed .Status}}isdone{{end}}">
+            <td class="selcol"><input type="checkbox" class="sel" data-sel="{{.Ref}}" aria-label="Select {{.Ref}}"></td>
+            <td class="w100">{{template "type" .Type}} <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a> <a href="/i/{{.Ref}}">{{.Title}}</a> {{if gt .OpenBlockers 0}}<span class="chip warn">blocked · {{.OpenBlockers}}</span>{{end}}</td>
+            <td>{{template "status" .Status}}</td>
+            <td class="muted">{{if .Stretch}}stretch{{else}}committed{{end}}</td>
+            {{if ne $r.Status "shipped"}}<td>{{with index $r.Outlook .Ref}}<span class="outlook o-{{outlookClass .}}">{{if eq . "likely"}}✓{{else if eq . "maybe"}}~{{else}}!{{end}} {{.}}</span>{{end}}</td>{{end}}
+            <td class="nowrap">{{if .Epic}}<a class="chip epic" href="/e/{{.Epic}}" title="{{.EpicTitle}}">{{shortRef .Epic}}</a>{{end}}</td>
+            <td class="muted nowrap">{{.Queue}}</td>
+          </tr>{{end}}
+        </tbody>
+      </table></div>
+      {{else}}<p class="empty">No stories yet. Tick stories on the board or the items list and choose this release in the bar, or add an epic.</p>{{end}}
+
+      <h2>Release notes</h2>
+      <div class="panel">
+        <div class="row"><span class="grow muted small">Finished stories grouped by epic, as markdown. Also: <code>tasker release notes {{$r.Ref}}</code></span>
+          <button type="button" class="btn small" data-copy="#relnotes">Copy</button></div>
+        <pre class="raw" id="relnotes">{{.D.Notes}}</pre>
+      </div>
+    </div>
+
+    <aside class="side">
+      {{if ne $r.Status "shipped"}}
+      <h3>Add an epic</h3>
+      <form class="panel" data-api="POST /api/releases/{{$r.Ref}}/epics" data-then="reload">
+        <select name="epic" required><option value="">Choose an epic…</option>{{range .D.Epics}}<option value="{{.Ref}}">{{shortRef .Ref}} · {{.Title}}</option>{{end}}</select>
+        <label class="check"><input type="checkbox" name="stretch"> as stretch</label>
+        <p class="muted small">Adds its open stories. Stories already planned into another release stay there.</p>
+        <div class="row end"><button class="btn small">Add</button></div>
+      </form>
+      {{end}}
+      <h3>Scope changes</h3>
+      <div class="panel">{{template "activity" $r.Changes}}</div>
+    </aside>
+  </div>
+</div>
+{{end}}

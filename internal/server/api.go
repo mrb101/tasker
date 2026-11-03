@@ -127,6 +127,7 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		return st.ListItems(store.ItemFilter{
 			Project: r.PathValue("key"), Status: q["status"], Type: q.Get("type"), Epic: q.Get("epic"),
 			Queue: q.Get("queue"), Label: q.Get("label"), Assignee: q.Get("assignee"), Query: q.Get("q"), Limit: limit,
+			Release: q.Get("release"), Blocked: q.Get("blocked"), Sort: q.Get("sort"),
 		})
 	}))
 	mux.HandleFunc("POST /api/projects/{key}/items", h(func(r *http.Request) (any, error) {
@@ -153,6 +154,54 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		}
 		return st.BulkUpdate(actorOf(r), r.PathValue("key"), in.Refs, in.Patch)
 	}))
+	// releases
+	mux.HandleFunc("GET /api/projects/{key}/releases", h(func(r *http.Request) (any, error) { return st.ListReleases(r.PathValue("key")) }))
+	mux.HandleFunc("POST /api/projects/{key}/releases", h(func(r *http.Request) (any, error) {
+		var in store.ReleaseInput
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return st.CreateRelease(actorOf(r), r.PathValue("key"), in)
+	}))
+	mux.HandleFunc("GET /api/releases/{ref}", h(func(r *http.Request) (any, error) { return st.GetRelease(r.PathValue("ref")) }))
+	mux.HandleFunc("PATCH /api/releases/{ref}", h(func(r *http.Request) (any, error) {
+		var p store.ReleasePatch
+		if err := decode(r, &p); err != nil {
+			return nil, err
+		}
+		return st.UpdateRelease(actorOf(r), r.PathValue("ref"), p)
+	}))
+	mux.HandleFunc("DELETE /api/releases/{ref}", h(func(r *http.Request) (any, error) {
+		return ok{true}, st.DeleteRelease(actorOf(r), r.PathValue("ref"))
+	}))
+	mux.HandleFunc("POST /api/releases/{ref}/ship", h(func(r *http.Request) (any, error) {
+		var in store.ShipInput
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return st.ShipRelease(actorOf(r), r.PathValue("ref"), in)
+	}))
+	mux.HandleFunc("POST /api/releases/{ref}/epics", h(func(r *http.Request) (any, error) {
+		var in struct {
+			Epic    string `json:"epic"`
+			Stretch bool   `json:"stretch"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		added, skipped, err := st.AddEpicToRelease(actorOf(r), r.PathValue("ref"), in.Epic, in.Stretch)
+		return map[string]any{"added": added, "skipped": skipped}, err
+	}))
+	mux.HandleFunc("GET /api/releases/{ref}/notes", func(w http.ResponseWriter, r *http.Request) {
+		notes, err := st.ReleaseNotes(r.PathValue("ref"))
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		fmt.Fprint(w, notes)
+	})
+
 	mux.HandleFunc("GET /api/items/{ref}", h(func(r *http.Request) (any, error) { return st.GetItem(r.PathValue("ref")) }))
 	mux.HandleFunc("PATCH /api/items/{ref}", h(func(r *http.Request) (any, error) {
 		var p store.ItemPatch
@@ -416,6 +465,9 @@ func (s *Server) lookup(ref string) (any, error) {
 	case store.KindDoc:
 		d, err := s.store.GetDoc(ref)
 		return map[string]any{"kind": "doc", "doc": d}, err
+	case store.KindRel:
+		rel, err := s.store.GetRelease(ref)
+		return map[string]any{"kind": "release", "release": rel}, err
 	}
 	it, err := s.store.GetItem(ref)
 	return map[string]any{"kind": "item", "item": it}, err

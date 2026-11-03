@@ -63,7 +63,8 @@ func (a *app) projectCmd() *cobra.Command {
 			})
 		},
 	})
-	var name, pdesc, gate string
+	var name, pdesc, gate, relMode string
+	var relWeeks int
 	set := &cobra.Command{
 		Use: "set KEY", Short: "Change project settings", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -77,6 +78,12 @@ func (a *app) projectCmd() *cobra.Command {
 			if cmd.Flags().Changed("plan-gate") {
 				patch["plan_gate"] = gate == "on" || gate == "true" || gate == "1"
 			}
+			if cmd.Flags().Changed("release-mode") {
+				patch["release_mode"] = relMode
+			}
+			if cmd.Flags().Changed("release-weeks") {
+				patch["release_weeks"] = relWeeks
+			}
 			return call(a, "PATCH", "/api/projects/"+esc(args[0]), patch, func(p *store.Project) {
 				fmt.Fprintf(a.out, "updated %s (plan gate: %v)\n", p.Key, p.PlanGate)
 			})
@@ -85,6 +92,8 @@ func (a *app) projectCmd() *cobra.Command {
 	set.Flags().StringVar(&name, "name", "", "name")
 	set.Flags().StringVarP(&pdesc, "description", "d", "", "description")
 	set.Flags().StringVar(&gate, "plan-gate", "", "on|off: require an approved plan before items can start")
+	set.Flags().StringVar(&relMode, "release-mode", "", "date: ship on the date with what is done; scope: ship when the stories are done")
+	set.Flags().IntVar(&relWeeks, "release-weeks", 0, "release rhythm in weeks for date mode (0 = none)")
 	cmd.AddCommand(set)
 	cmd.AddCommand(a.deleteCmd("delete KEY", "Delete a project and everything in it", func(ref string) string { return "/api/projects/" + esc(ref) }))
 	return cmd
@@ -298,7 +307,8 @@ func (a *app) lsAlias() *cobra.Command {
 }
 
 func (a *app) itemUpdateCmd() *cobra.Command {
-	var title, body, file, typ, status, prio, epic, queue, assignee, branch, pr string
+	var title, body, file, typ, status, prio, epic, queue, assignee, branch, pr, release string
+	var stretch, committed bool
 	var addL, rmL []string
 	var ifVersion int
 	cmd := &cobra.Command{
@@ -321,6 +331,13 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 			set("assignee", "assignee", assignee)
 			set("branch", "branch", branch)
 			set("pr", "pr_url", pr)
+			set("release", "release", release)
+			if stretch {
+				patch["stretch"] = true
+			}
+			if committed {
+				patch["stretch"] = false
+			}
 			if text, ok, err := readText(body, file); err != nil {
 				return err
 			} else if ok {
@@ -365,6 +382,9 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 	fl.StringVar(&assignee, "assignee", "", "assignee")
 	fl.StringVar(&branch, "branch", "", "branch name")
 	fl.StringVar(&pr, "pr", "", "pull request URL")
+	fl.StringVar(&release, "release", "", "release ref ('' = out of its release)")
+	fl.BoolVar(&stretch, "stretch", false, "in its release as a stretch")
+	fl.BoolVar(&committed, "committed", false, "in its release as a commitment")
 	fl.StringSliceVar(&addL, "add-label", nil, "add labels")
 	fl.StringSliceVar(&rmL, "rm-label", nil, "remove labels")
 	fl.IntVar(&ifVersion, "if-version", 0, "fail with exit 4 if the item changed since this version")
@@ -628,10 +648,10 @@ func (a *app) claimCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) releaseCmd() *cobra.Command {
+func (a *app) unclaimCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use: "release REF", Short: "Release your claim on an item", Args: cobra.ExactArgs(1),
+		Use: "unclaim REF", Short: "Give up your claim on an item", Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return call(a, "POST", "/api/items/"+esc(args[0])+"/release", map[string]any{"force": force}, func(it *store.Item) {
 				fmt.Fprintf(a.out, "%s released\n", it.Ref)

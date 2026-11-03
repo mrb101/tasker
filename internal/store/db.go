@@ -304,6 +304,28 @@ CREATE INDEX activity_project ON activity(project_id, id);
 `, `
 CREATE INDEX items_epic ON items(epic_id);
 CREATE INDEX items_project_queue ON items(project_id, queue_id);
+`, `
+ALTER TABLE projects ADD COLUMN release_mode TEXT NOT NULL DEFAULT 'date';
+ALTER TABLE projects ADD COLUMN release_weeks INTEGER NOT NULL DEFAULT 4;
+ALTER TABLE projects ADD COLUMN release_seq INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE releases (
+	id INTEGER PRIMARY KEY,
+	project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+	number INTEGER NOT NULL,
+	name TEXT NOT NULL,
+	goal TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'planned',
+	starts_on TEXT NOT NULL DEFAULT '',
+	target_on TEXT NOT NULL DEFAULT '',
+	shipped_at TEXT NOT NULL DEFAULT '',
+	tag TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	UNIQUE(project_id, number)
+);
+ALTER TABLE items ADD COLUMN release_id INTEGER REFERENCES releases(id) ON DELETE SET NULL;
+ALTER TABLE items ADD COLUMN stretch INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX items_release ON items(release_id);
 `}
 
 func (s *Store) migrate() error {

@@ -88,6 +88,31 @@ Errors are `{"error": "...", "kind": "not_found|conflict|invalid"}` with 404/409
 Writes need `Content-Type: application/json`; cross-origin writes are refused (there is no auth, keep it on localhost).
 Optimistic concurrency: `if_version` on items, `if_revision` on documents.
 
+## Releases
+
+A release is a goal (what someone can do once it ships) plus the stories that reach it, drawn from any epics.
+Each project chooses in Settings how its releases work:
+
+- **Fixed date**: a release ships on its target date with whatever is done; the rest moves to the next release.
+  With a rhythm (say every 4 weeks) a new release's dates follow on from the previous one.
+- **Fixed scope**: a release ships when its stories are done.
+
+Put stories in a release from the bulk bar (tick stories, choose **Release**, and **committed** or **stretch**),
+from a story's page, or a whole epic at once from the release page. The release page shows:
+
+- **a forecast** from your measured pace, not estimates. It replays the stories finished per week over the last
+  eight weeks 4,000 times: in date mode it says how many more stories are done by the target (85% sure and
+  even odds) and marks each story *likely*, *maybe* or *at risk*; in scope mode it gives the likely finish date.
+  Weeks far above the rest (bulk closes, imports) are left out, and it says which weeks it used.
+- **risks**: stories waiting on something outside the release, waiting on a decision, or without an approved plan
+  when the plan gate is on;
+- a burn-up of the release's scope against done, its scope history, and **release notes** grouped by epic.
+
+**Ship** records the git tag and moves unfinished stories to the next planned release (or one you choose). One
+release is in progress at a time, and `tasker next -p KEY` prefers its stories. On the command line:
+`tasker release create|list|show|start|ship|notes|add|add-epic|remove`. (Giving up a claim on a story is
+`tasker unclaim`.)
+
 ## Notifications
 
 tasker tells you when something waits on you: a document submitted for review (usually a plan an agent

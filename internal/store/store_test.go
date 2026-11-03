@@ -2,7 +2,9 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -300,5 +302,111 @@ func TestBulkUpdate(t *testing.T) {
 	newest := must(s.ListItems(ItemFilter{Project: "API", Status: []string{"triage"}, Sort: "newest", Blocked: "hide"}))
 	if len(newest) != 2 || newest[0].Ref != refsIn[3] {
 		t.Fatalf("newest: %v", refs(newest))
+	}
+}
+
+func TestReleases(t *testing.T) {
+	s := newStore(t)
+	pr := must(s.GetProject("API"))
+	if pr.ReleaseMode != "date" || pr.ReleaseWeeks != 4 {
+		t.Fatalf("defaults: %s %d", pr.ReleaseMode, pr.ReleaseWeeks)
+	}
+	ep := must(s.CreateEpic("me", "API", "Auth", ""))
+
+	// Dates follow the rhythm: R1 starts today, R2 the day after R1's target.
+	r1 := must(s.CreateRelease("me", "API", ReleaseInput{Goal: "Brokers can sign in"}))
+	if r1.Name != "Release 1" || r1.StartsOn == "" || r1.TargetOn == "" {
+		t.Fatalf("r1: %+v", r1)
+	}
+	st, _ := time.Parse(dateLayout, r1.StartsOn)
+	if r1.TargetOn != st.AddDate(0, 0, 27).Format(dateLayout) {
+		t.Fatalf("r1 target %s from start %s", r1.TargetOn, r1.StartsOn)
+	}
+	r2 := must(s.CreateRelease("me", "API", ReleaseInput{Name: "1.1"}))
+	tg, _ := time.Parse(dateLayout, r1.TargetOn)
+	if r2.StartsOn != tg.AddDate(0, 0, 1).Format(dateLayout) {
+		t.Fatalf("r2 starts %s, r1 ends %s", r2.StartsOn, r1.TargetOn)
+	}
+
+	// Ten finished stories a week for the last six weeks, plus one import-sized week.
+	var open []string
+	for i := 0; i < 12; i++ {
+		open = append(open, must(s.CreateItem("me", "API", ItemInput{Title: fmt.Sprintf("open %d", i), Epic: ep.Ref})).Ref)
+	}
+	for w := 1; w <= 6; w++ {
+		n := 10
+		if w == 3 {
+			n = 200 // a bulk close: not a real week of work
+		}
+		for i := 0; i < n; i++ {
+			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
+			closed := weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339)
+			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, closed, it.ID)
+		}
+	}
+	samples, dropped, _ := s.weeklyThroughput(pr.ID, 8)
+	if len(dropped) != 1 || dropped[0] != 200 {
+		t.Fatalf("outlier: samples %v dropped %v", samples, dropped)
+	}
+
+	// Plan: 10 committed + 2 stretch; one story waits on something outside the release.
+	rel, stretch := r1.Ref, true
+	must(s.BulkUpdate("me", "API", open[:10], ItemPatch{Release: &rel}))
+	must(s.BulkUpdate("me", "API", open[10:], ItemPatch{Release: &rel, Stretch: &stretch}))
+	outside := must(s.CreateItem("me", "API", ItemInput{Title: "outside"}))
+	must(0, s.AddLink("me", open[0], "blocked_by", outside.Ref))
+
+	got := must(s.GetRelease(r1.Ref))
+	if got.Committed != 10 || got.Stretch != 2 || got.Total != 12 {
+		t.Fatalf("counts: %d committed %d stretch %d total", got.Committed, got.Stretch, got.Total)
+	}
+	f := got.Forecast
+	if !f.Enough || f.Remaining != 12 || f.Likely85 > f.Likely50 || f.Likely85 < 30 {
+		// four weeks left at ~10 a week: comfortably more than the 12 planned
+		t.Fatalf("forecast: %+v", f)
+	}
+	if got.Outlook[open[11]] != OutlookLikely {
+		t.Fatalf("outlook: %v", got.Outlook)
+	}
+	if len(got.Risks) != 1 || got.Risks[0].Ref != open[0] || !strings.Contains(got.Risks[0].Reason, "not in this release") {
+		t.Fatalf("risks: %+v", got.Risks)
+	}
+	if w := got.Weeks[len(got.Weeks)-1]; w.Scope != 12 {
+		t.Fatalf("burn-up scope %d", w.Scope)
+	}
+
+	// One release in progress at a time.
+	active := "active"
+	must(s.UpdateRelease("me", r1.Ref, ReleasePatch{Status: &active}))
+	if _, err := s.UpdateRelease("me", r2.Ref, ReleasePatch{Status: &active}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("want conflict, got %v", err)
+	}
+
+	// Ship: done stories stay, unfinished ones move to the next planned release.
+	must(s.Finish("me", open[1], FinishInput{Status: "done"}))
+	shipped := must(s.ShipRelease("me", r1.Ref, ShipInput{Tag: "v1.0"}))
+	if shipped.Status != "shipped" || shipped.Tag != "v1.0" || shipped.Total != 1 {
+		t.Fatalf("shipped: %+v", shipped)
+	}
+	next := must(s.GetRelease(r2.Ref))
+	if next.Total != 11 || next.Weeks[len(next.Weeks)-1].Scope != 11 {
+		t.Fatalf("carried over: %d (scope %d)", next.Total, next.Weeks[len(next.Weeks)-1].Scope)
+	}
+	if _, err := s.UpdateItem("me", open[2], ItemPatch{Release: &rel}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("adding to a shipped release: %v", err)
+	}
+	notes := must(s.ReleaseNotes(r1.Ref))
+	if !strings.Contains(notes, "## Auth") || !strings.Contains(notes, "("+open[1]+")") || !strings.Contains(notes, "`v1.0`") {
+		t.Fatalf("notes:\n%s", notes)
+	}
+
+	// Scope mode forecasts a date instead.
+	scope := "scope"
+	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
+	r3 := must(s.CreateRelease("me", "API", ReleaseInput{Name: "2.0"}))
+	two := r3.Ref
+	must(s.BulkUpdate("me", "API", []string{open[2]}, ItemPatch{Release: &two}))
+	if f := must(s.GetRelease(r3.Ref)).Forecast; f.Date50 == "" || f.Date85 < f.Date50 {
+		t.Fatalf("scope forecast: %+v", f)
 	}
 }

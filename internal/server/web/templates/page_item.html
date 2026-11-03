@@ -38,6 +38,8 @@
         <label>Priority <select name="priority">{{range vocab "priorities"}}<option {{if eq . $it.Priority}}selected{{end}}>{{.}}</option>{{end}}</select></label>
         <label>Epic <select name="epic"><option value="">—</option>{{range .D.Epics}}<option value="{{.Ref}}" {{if eq .Ref $it.Epic}}selected{{end}}>{{.Ref}} · {{.Title}}</option>{{end}}</select></label>
         <label>Queue <select name="queue"><option value="">— triage (no queue) —</option>{{range .D.Queues}}<option value="{{.Name}}" {{if eq .Name $it.Queue}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        <label>Release <select name="release"><option value="">—</option>{{range .D.Releases}}<option value="{{.Ref}}" {{if eq .Ref $it.Release}}selected{{end}}>{{.Name}}{{if eq .Status "active"}} (in progress){{end}}</option>{{end}}</select></label>
+        {{if $it.Release}}<label>Plan <select name="stretch" data-type="bool"><option value="false" {{if not $it.Stretch}}selected{{end}}>committed</option><option value="true" {{if $it.Stretch}}selected{{end}}>stretch</option></select></label>{{end}}
         <label>Assignee <input name="assignee" value="{{$it.Assignee}}"></label>
         <label>Branch <input name="branch" value="{{$it.Branch}}" class="mono" placeholder="set on start"></label>
         <label>PR <input name="pr_url" value="{{$it.PRURL}}" placeholder="https://…"></label>

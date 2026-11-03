@@ -1,0 +1,64 @@
+{{define "content"}}
+{{$p := .Project}}
+<div class="page wide">
+  <div class="head">
+    <div>
+      <h1>Releases</h1>
+      <p class="muted small">
+        {{if eq $p.ReleaseMode "scope"}}This project ships a release when its stories are done; tasker forecasts the date.
+        {{else}}This project ships on dates{{if $p.ReleaseWeeks}}, every {{$p.ReleaseWeeks}} weeks{{end}}: what is done goes out, the rest moves on.{{end}}
+        <a href="/p/{{$p.Key}}/settings">Change</a>
+      </p>
+    </div>
+    <button class="btn" data-toggle="#newrelease">New release</button>
+  </div>
+
+  <form id="newrelease" class="panel form-grid" data-api="POST /api/projects/{{$p.Key}}/releases" data-then="goto:/rel/{ref}" {{if .D.Current}}hidden{{end}}>
+    <label>Name or version <input name="name" placeholder="1.4 (blank: Release N)"></label>
+    <span></span>
+    <label class="span2">Goal <input name="goal" placeholder="What someone can do once it ships, e.g. a broker can be invited and see only their firm"></label>
+    <label>Starts <input type="date" name="starts_on" data-omit-empty></label>
+    <label>Target {{if eq $p.ReleaseMode "scope"}}(optional){{end}} <input type="date" name="target_on" data-omit-empty></label>
+    <p class="span2 muted small">{{if and (eq $p.ReleaseMode "date") $p.ReleaseWeeks}}Leave the dates empty to follow on from the last release, {{$p.ReleaseWeeks}} weeks long.{{end}}</p>
+    <div class="span2 row end"><button class="btn primary">Plan release</button></div>
+  </form>
+
+  {{range .D.Current}}
+  <a class="relcard {{if eq .Status "active"}}active{{end}}" href="/rel/{{.Ref}}">
+    <div class="row">
+      <span class="ref">{{.Ref}}</span><b class="grow">{{.Name}}</b>
+      <span class="status s-{{if eq .Status "active"}}active{{else}}queued{{end}}">{{if eq .Status "active"}}in progress{{else}}planned{{end}}</span>
+    </div>
+    {{if .Goal}}<p class="relgoal">{{.Goal}}</p>{{end}}
+    <div class="row small muted">
+      <span>{{if .StartsOn}}{{.StartsOn}}{{end}}{{if .TargetOn}} → {{.TargetOn}}{{end}}</span>
+      <span>· {{.Done}}/{{.Total}} done · {{.Committed}} committed, {{.Stretch}} stretch open</span>
+    </div>
+    <span class="progress wide"><i style="width:{{pct .Done .Total}}%"></i></span>
+    {{template "forecastline" .}}
+  </a>
+  {{else}}
+  <div class="panel empty-state">
+    <h3>No release planned</h3>
+    <p>A release is a goal plus the stories that reach it. Plan one, then add stories from the board or the items list (tick them, then choose the release in the bar), or add whole epics from the release page.</p>
+  </div>
+  {{end}}
+
+  {{if .D.Shipped}}
+  <h2>Shipped</h2>
+  <div class="tablewrap"><table class="list">
+    <thead><tr><th>Release</th><th>Name</th><th>Shipped</th><th>Tag</th><th class="num">Stories</th></tr></thead>
+    <tbody>{{range .D.Shipped}}<tr><td><a class="ref" href="/rel/{{.Ref}}">{{.Ref}}</a></td><td><a href="/rel/{{.Ref}}">{{.Name}}</a></td><td class="nowrap">{{date .ShippedAt}}</td><td><code>{{.Tag}}</code></td><td class="num">{{.Done}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "forecastline"}}{{if eq .Total 0}}<p class="forecast small muted">Nothing planned into it yet.</p>{{else}}{{with .Forecast}}
+  <p class="forecast small">
+  {{if not .Enough}}<span class="muted">Not enough finished work yet to forecast from.</span>
+  {{else if eq .Remaining 0}}Everything planned is done.
+  {{else if .Date50}}All {{.Remaining}} open stories done by <b>{{.Date50}}</b> (even odds) or <b>{{.Date85}}</b> (85% sure).
+  {{else}}By the target: <b>{{.Likely85}}</b> more stories 85% sure, <b>{{.Likely50}}</b> even odds — of {{.Remaining}} open.{{end}}
+  </p>
+{{end}}{{end}}{{end}}

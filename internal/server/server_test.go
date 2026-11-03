@@ -106,9 +106,17 @@ func TestAPIFlowAndPages(t *testing.T) {
 		t.Fatalf("mcp get: %v", m)
 	}
 
+	c, m = req(t, ts, "POST", "/api/projects/API/releases", map[string]any{"name": "1.0", "goal": "brokers sign in"})
+	mustStatus(201, c, m)
+	c, m = req(t, ts, "POST", "/api/projects/API/items/batch", map[string]any{"refs": []string{"API-1", "API-2"}, "patch": map[string]any{"release": "API-R1"}})
+	mustStatus(201, c, m)
+	if res, _ := http.Get(ts.URL + "/api/releases/API-R1/notes"); res.StatusCode != 200 {
+		t.Fatalf("notes: %d", res.StatusCode)
+	}
+
 	// every page renders
 	for _, p := range []string{"/", "/reviews", "/search?q=one", "/p/API", "/p/API/items", "/p/API/epics", "/p/API/docs",
-		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/e/API-E1",
+		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/p/API/releases", "/rel/API-R1", "/r/API-R1", "/e/API-E1",
 		"/d/API-D1", "/d/API-D1?view=diff", "/d/API-D1?view=edit", "/d/API-D1?view=raw", "/d/API-D1?rev=1"} {
 		res, err := http.Get(ts.URL + p)
 		if err != nil {

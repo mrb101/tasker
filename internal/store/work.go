@@ -247,7 +247,11 @@ func (s *Store) Next(nq NextQuery) (*NextResult, error) {
 		if pr, err = s.project(s.db, nq.Project); err != nil {
 			return nil, err
 		}
-		cands, err = queryItems(s.db, `WHERE i.project_id = ? AND i.status IN ('inbox','queued','active') ORDER BY CASE WHEN i.status = 'active' THEN 0 ELSE 1 END, i.priority, i.number`, pr.ID)
+		// Stories in the release in progress come first, then by priority.
+		cands, err = queryItems(s.db, `WHERE i.project_id = ? AND i.status IN ('inbox','queued','active')
+			ORDER BY CASE WHEN i.status = 'active' THEN 0 ELSE 1 END,
+			CASE WHEN i.release_id IN (SELECT id FROM releases WHERE project_id = i.project_id AND status = 'active') THEN 0 ELSE 1 END,
+			i.priority, i.number`, pr.ID)
 		if err != nil {
 			return nil, err
 		}

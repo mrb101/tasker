@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -36,12 +37,12 @@ func (s *Store) CreateProject(actor, key, name, description string) (*Project, e
 func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	p := &Project{}
 	var gate int
-	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.CreatedAt, &p.UpdatedAt)
+	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.ReleaseMode, &p.ReleaseWeeks, &p.CreatedAt, &p.UpdatedAt)
 	p.PlanGate = gate == 1
 	return p, err
 }
 
-const projectCols = `id, key, name, description, plan_gate, created_at, updated_at`
+const projectCols = `id, key, name, description, plan_gate, release_mode, release_weeks, created_at, updated_at`
 
 func (s *Store) project(q querier, key string) (*Project, error) {
 	p, err := scanProject(q.QueryRow(`SELECT `+projectCols+` FROM projects WHERE key = ?`, strings.ToUpper(strings.TrimSpace(key))))
@@ -169,9 +170,11 @@ func (s *Store) ListProjects() ([]*Project, error) {
 }
 
 type ProjectPatch struct {
-	Name        *string `json:"name"`
-	Description *string `json:"description"`
-	PlanGate    *bool   `json:"plan_gate"`
+	Name         *string `json:"name"`
+	Description  *string `json:"description"`
+	PlanGate     *bool   `json:"plan_gate"`
+	ReleaseMode  *string `json:"release_mode"`
+	ReleaseWeeks *int    `json:"release_weeks"`
 }
 
 func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, error) {
@@ -193,12 +196,26 @@ func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, erro
 			pr.PlanGate = *p.PlanGate
 			changes = append(changes, "plan_gate")
 		}
+		if p.ReleaseMode != nil {
+			if err := checkOneOf("release mode", *p.ReleaseMode, ReleaseModes); err != nil {
+				return err
+			}
+			pr.ReleaseMode = *p.ReleaseMode
+			changes = append(changes, "release_mode="+pr.ReleaseMode)
+		}
+		if p.ReleaseWeeks != nil {
+			if *p.ReleaseWeeks < 0 || *p.ReleaseWeeks > 52 {
+				return invalid("release rhythm must be 0 (none) to 52 weeks")
+			}
+			pr.ReleaseWeeks = *p.ReleaseWeeks
+			changes = append(changes, fmt.Sprintf("release_weeks=%d", pr.ReleaseWeeks))
+		}
 		gate := 0
 		if pr.PlanGate {
 			gate = 1
 		}
-		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, updated_at=? WHERE id=?`,
-			pr.Name, pr.Description, gate, now(), pr.ID); err != nil {
+		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, release_mode=?, release_weeks=?, updated_at=? WHERE id=?`,
+			pr.Name, pr.Description, gate, pr.ReleaseMode, pr.ReleaseWeeks, now(), pr.ID); err != nil {
 			return err
 		}
 		return t.log(pr.ID, pr.Key, pr.Key, "project.updated", strings.Join(changes, ", "))

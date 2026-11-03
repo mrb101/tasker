@@ -153,6 +153,7 @@ var mcpTools = []mcpTool{
 			"ref": str("Item ref"), "title": str(""), "body": str("Markdown"), "type": enum("", store.ItemTypes), "status": enum("", store.ItemStatuses),
 			"priority": enum("", store.Priorities), "epic": str("Epic ref or ''"), "queue": str("Queue name or ''"), "assignee": str(""),
 			"branch": str(""), "pr_url": str(""), "add_labels": strs(""), "remove_labels": strs(""),
+			"release": str("Release ref, e.g. API-R2, or '' to take it out"), "stretch": boolean("In its release as a stretch rather than a commitment"),
 			"if_version": map[string]any{"type": "integer", "description": "Fail if the item changed since this version"},
 		}, "ref"),
 		run: func(s *Server, actor string, raw json.RawMessage) (any, error) {
@@ -271,6 +272,21 @@ var mcpTools = []mcpTool{
 				return nil, err
 			}
 			return s.store.UpdateDoc(actor, a.Ref, a.DocPatch)
+		},
+	},
+	{
+		Name:        "tasker_release",
+		Description: "Show a release (goal, dates, forecast, risks, stories with their outlook), or list a project's releases when no release is given.",
+		InputSchema: obj(map[string]any{"release": str("Release ref, e.g. API-R2"), "project": str("Project key (to list releases)")}),
+		run: func(s *Server, _ string, raw json.RawMessage) (any, error) {
+			a, err := args[struct{ Release, Project string }](raw)
+			if err != nil {
+				return nil, err
+			}
+			if a.Release == "" {
+				return s.store.ListReleases(a.Project)
+			}
+			return s.store.GetRelease(a.Release)
 		},
 	},
 	{

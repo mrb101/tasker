@@ -13,22 +13,28 @@ const itemSelect = `SELECT i.id, i.project_id, p.key, i.number, i.type, i.title,
 	i.assignee, i.branch, i.pr_url, i.claimed_by, i.claim_expires, i.version, i.created_at, i.updated_at, i.closed_at,
 	(SELECT count(*) FROM item_links l JOIN items b ON b.id = l.from_id
 		WHERE l.to_id = i.id AND l.kind = 'blocks' AND b.status NOT IN ('done','cancelled')),
-	COALESCE((SELECT group_concat(label, ',') FROM item_labels WHERE item_id = i.id), '')
+	COALESCE((SELECT group_concat(label, ',') FROM item_labels WHERE item_id = i.id), ''),
+	COALESCE(r.number, 0), i.stretch
 FROM items i
 JOIN projects p ON p.id = i.project_id
 LEFT JOIN epics e ON e.id = i.epic_id
-LEFT JOIN queues q ON q.id = i.queue_id`
+LEFT JOIN queues q ON q.id = i.queue_id
+LEFT JOIN releases r ON r.id = i.release_id`
 
 func scanItem(row interface{ Scan(...any) error }) (*Item, error) {
 	it := &Item{}
-	var prio, epicNum int
+	var prio, epicNum, relNum, stretch int
 	var labels string
 	err := row.Scan(&it.ID, &it.ProjectID, &it.Project, &it.Number, &it.Type, &it.Title, &it.Body, &it.Status, &prio,
 		&epicNum, &it.EpicTitle, &it.QueueID, &it.Queue, &it.QueuePos,
 		&it.Assignee, &it.Branch, &it.PRURL, &it.ClaimedBy, &it.ClaimExpires, &it.Version, &it.CreatedAt, &it.UpdatedAt, &it.ClosedAt,
-		&it.OpenBlockers, &labels)
+		&it.OpenBlockers, &labels, &relNum, &stretch)
 	if err != nil {
 		return nil, err
+	}
+	if relNum > 0 {
+		it.Release = relRef(it.Project, relNum)
+		it.Stretch = stretch == 1
 	}
 	it.Ref = itemRef(it.Project, it.Number)
 	it.Priority = priorityName(prio)
@@ -390,13 +396,15 @@ type ItemFilter struct {
 	Assignee string   `json:"assignee"`
 	Query    string   `json:"q"`
 	Blocked  string   `json:"blocked"` // "only" or "hide"
+	Release  string   `json:"release"` // release ref, or "none"
 	Sort     string   `json:"sort"`    // priority (default) | newest | oldest | epic
 	Limit    int      `json:"limit"`
 }
 
 // itemsFrom is the FROM clause the filter's conditions are written against.
 const itemsFrom = ` FROM items i JOIN projects p ON p.id = i.project_id
-	LEFT JOIN epics e ON e.id = i.epic_id LEFT JOIN queues q ON q.id = i.queue_id `
+	LEFT JOIN epics e ON e.id = i.epic_id LEFT JOIN queues q ON q.id = i.queue_id
+	LEFT JOIN releases r ON r.id = i.release_id `
 
 // CountItems counts the items a filter matches (ignoring Limit and Sort).
 func (s *Store) CountItems(f ItemFilter) (int, error) {
@@ -514,6 +522,18 @@ func itemWhere(f ItemFilter) (string, []any, error) {
 			args = append(args, like, like, like)
 		}
 	}
+	switch f.Release {
+	case "":
+	case "none":
+		where = append(where, "i.release_id IS NULL")
+	default:
+		r, err := ParseRef(f.Release)
+		if err != nil || r.Kind != KindRel {
+			return "", nil, invalid("release must be a release ref like API-R1, or none")
+		}
+		where = append(where, "p.key = ? AND r.number = ?")
+		args = append(args, r.Project, r.Number)
+	}
 	const openBlockers = `EXISTS (SELECT 1 FROM item_links l JOIN items b ON b.id = l.from_id
 		WHERE l.to_id = i.id AND l.kind = 'blocks' AND b.status NOT IN ('done','cancelled'))`
 	switch f.Blocked {
@@ -545,6 +565,8 @@ type ItemPatch struct {
 	Branch       *string   `json:"branch"`
 	PRURL        *string   `json:"pr_url"`
 	Labels       *[]string `json:"labels"`
+	Release      *string   `json:"release"` // a release ref, or "" to take it out of its release
+	Stretch      *bool     `json:"stretch"` // in its release as a stretch rather than a commitment
 	AddLabels    []string  `json:"add_labels"`
 	RemoveLabels []string  `json:"remove_labels"`
 	IfVersion    int       `json:"if_version"`
@@ -673,6 +695,43 @@ func (s *Store) updateItemTx(t *txc, ref string, p ItemPatch) error {
 			return err
 		}
 		changes = append(changes, "status="+it.Status)
+	}
+	if p.Release != nil {
+		relID, err := s.releaseIDFor(t, pr, *p.Release)
+		if err != nil {
+			return err
+		}
+		if _, err := t.Exec(`UPDATE items SET release_id = ? WHERE id = ?`, relID, it.ID); err != nil {
+			return err
+		}
+		// The release's own history records what came in and went out (its scope log and burn-up).
+		if newRel := strings.ToUpper(strings.TrimSpace(*p.Release)); newRel != it.Release {
+			if it.Release != "" {
+				if err := t.log(it.ProjectID, it.Project, it.Release, "release.removed", it.Ref+" "+it.Title); err != nil {
+					return err
+				}
+			}
+			if newRel != "" {
+				if err := t.log(it.ProjectID, it.Project, newRel, "release.added", it.Ref+" "+it.Title); err != nil {
+					return err
+				}
+			}
+		}
+		if *p.Release == "" {
+			changes = append(changes, "release cleared")
+		} else {
+			changes = append(changes, "release="+strings.ToUpper(*p.Release))
+		}
+	}
+	if p.Stretch != nil {
+		v := 0
+		if *p.Stretch {
+			v = 1
+		}
+		if _, err := t.Exec(`UPDATE items SET stretch = ? WHERE id = ?`, v, it.ID); err != nil {
+			return err
+		}
+		changes = append(changes, map[bool]string{true: "stretch", false: "committed"}[*p.Stretch])
 	}
 	var queueID any
 	if it.QueueID != 0 {

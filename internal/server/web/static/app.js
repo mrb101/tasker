@@ -38,6 +38,7 @@
     const v = el.value;
     switch (el.dataset.type) {
       case 'int': return v === '' ? 0 : parseInt(v, 10);
+      case 'bool': return v === 'true';
       case 'list': return v.split(',').map((s) => s.trim()).filter(Boolean);
     }
     return v;
@@ -47,6 +48,7 @@
     const out = {};
     for (const el of form.elements) {
       if (!el.name || el.disabled || (only && el !== only)) continue;
+      if (el.type === 'radio' && !el.checked) continue;
       const v = fieldValue(el);
       if (el.hasAttribute('data-omit-empty') && (v === '' || (Array.isArray(v) && !v.length))) continue;
       const parts = el.name.split('.');
@@ -252,6 +254,19 @@
   document.addEventListener('focusout', hideTip);
   document.addEventListener('scroll', hideTip, true);
 
+  // ---- copy buttons ----
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    const src = $(b.dataset.copy);
+    try {
+      await navigator.clipboard.writeText(src ? src.textContent : '');
+      toast('Copied');
+    } catch (_) {
+      toast('Copy is blocked here; select the text and copy it instead.', true);
+    }
+  });
+
   // ---- selection & bulk changes ----
   const sel = [];               // selected refs, in the order they were picked
   let lastPicked = null;        // for shift-click ranges
@@ -283,10 +298,18 @@
     if (bulkLoaded) return;
     bulkLoaded = true;
     try {
-      const [queues, epics] = await Promise.all([
+      const [queues, epics, releases] = await Promise.all([
         api('GET /api/queues?project=' + project()),
         api('GET /api/projects/' + project() + '/epics'),
+        api('GET /api/projects/' + project() + '/releases'),
       ]);
+      const rs = $('[data-bulk=release]');
+      releases.filter((r) => r.status !== 'shipped').forEach((r) => {
+        const o = document.createElement('option');
+        o.value = r.ref;
+        o.textContent = r.name + (r.status === 'active' ? ' (in progress)' : '');
+        rs.appendChild(o);
+      });
       const qs = $('[data-bulk=queue]');
       queues.forEach((q) => { const o = document.createElement('option'); o.value = q.name; o.textContent = q.name; qs.appendChild(o); });
       const es = $('[data-bulk=epic]');
@@ -341,6 +364,7 @@
       const field = sel_.dataset.bulk;
       let value = sel_.value, what = `${field} → ${sel_.options[sel_.selectedIndex].textContent}`;
       if (value === '__triage' || value === '__none') value = '';
+      if (field === 'stretch') value = value === 'true';
       sel_.value = '';
       bulkApply({ [field]: value }, what);
       return;

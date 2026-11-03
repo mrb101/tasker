@@ -493,3 +493,21 @@ body:has(#bulkbar:not([hidden])) #live { bottom: 96px; }
 .notifybtn::before { content: "🔕 "; }
 .notifybtn.on { color: var(--text); border-color: var(--accent); }
 .notifybtn.on::before { content: "🔔 "; }
+
+/* ---- releases ---- */
+.relcard { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.relcard:hover { border-color: var(--accent); color: inherit; }
+.relcard.active { border-left: 3px solid var(--warn); }
+.relgoal { margin: 0; }
+.relgoal.big { font-size: 15px; margin: 4px 0; }
+.forecast { margin: 0; }
+.forecast-panel h2 { margin-top: 0; }
+.forecast-panel p.big { font-size: 15px; }
+.outlook { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+.outlook.o-ok { background: var(--ok-soft); color: var(--ok); }
+.outlook.o-maybe { background: var(--warn-soft); color: var(--warn); }
+.outlook.o-risk { background: var(--bad-soft); color: var(--bad); }
+tr.isdone td { opacity: .6; }
+.risks .dep { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; flex-wrap: wrap; }
+.side select, .side input:not([type=checkbox]):not([type=radio]) { width: 100%; max-width: 100%; }
+.side .panel ul.activity { max-height: 420px; overflow-y: auto; }

@@ -62,6 +62,11 @@ Add --json to any command for machine-readable output.
   tasker queue move API-13 --to other-lane ; tasker queue remove API-13   # back to triage
   tasker doc push docs/plans/x.md        # create/update from a file; id saved in its frontmatter
 
+## Releases
+  tasker release list                    # the release in progress first
+  tasker release show API-R2             # goal, forecast, risks, stories with their outlook
+  tasker next -p API                     # prefers stories in the release in progress
+
 ## Exit codes
   0 ok · 1 error · 2 usage · 3 not found · 4 conflict (claimed, blocked, plan gate, version) · 5 invalid input
   doc wait: 0 approved · 10 changes requested · 11 superseded/draft · 12 timeout

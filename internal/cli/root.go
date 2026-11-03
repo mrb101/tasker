@@ -103,8 +103,8 @@ func (a *app) rootCmd() *cobra.Command {
 
 	root.AddCommand(
 		a.serveCmd(), a.healthCmd(), a.guideCmd(), a.backupCmd(),
-		a.projectCmd(), a.epicCmd(), a.itemCmd(), a.queueCmd(), a.docCmd(),
-		a.showCmd(), a.nextCmd(), a.startCmd(), a.finishCmd(), a.claimCmd(), a.releaseCmd(),
+		a.projectCmd(), a.epicCmd(), a.itemCmd(), a.queueCmd(), a.docCmd(), a.releaseCmd(),
+		a.showCmd(), a.nextCmd(), a.startCmd(), a.finishCmd(), a.claimCmd(), a.unclaimCmd(),
 		a.linkCmd(false), a.linkCmd(true), a.commentCmd(), a.searchCmd(), a.activityCmd(),
 		a.addAlias(), a.lsAlias(), a.mcpCmd(),
 	)

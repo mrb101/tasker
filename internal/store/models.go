@@ -17,6 +17,8 @@ var (
 	DocRoles     = []string{"plans", "informs", "found"}
 	EpicStatuses = []string{"open", "done", "cancelled"}
 	QueueStatus  = []string{"active", "paused", "archived"}
+	ReleaseModes = []string{"date", "scope"}
+	RelStatuses  = []string{"planned", "active", "shipped"}
 )
 
 func oneOf(v string, set []string) bool {
@@ -63,14 +65,16 @@ func normStatus(s string) string {
 func isClosed(status string) bool { return status == "done" || status == "cancelled" }
 
 type Project struct {
-	ID          int64          `json:"-"`
-	Key         string         `json:"key"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	PlanGate    bool           `json:"plan_gate"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
-	Counts      *ProjectCounts `json:"counts,omitempty"`
+	ID           int64          `json:"-"`
+	Key          string         `json:"key"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	PlanGate     bool           `json:"plan_gate"`
+	ReleaseMode  string         `json:"release_mode"`  // date: ship on the date with what is done; scope: ship when the scope is done
+	ReleaseWeeks int            `json:"release_weeks"` // the rhythm of a date-mode project; 0 = no rhythm
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+	Counts       *ProjectCounts `json:"counts,omitempty"`
 }
 
 type ProjectCounts struct {
@@ -120,6 +124,9 @@ type Item struct {
 	ClosedAt     string   `json:"closed_at,omitempty"`
 
 	OpenBlockers int `json:"open_blockers"`
+
+	Release string `json:"release,omitempty"` // ref, e.g. API-R2
+	Stretch bool   `json:"stretch,omitempty"` // in the release as a stretch, not a commitment
 
 	// Populated by GetItem only.
 	BlockedBy    []ItemRef  `json:"blocked_by,omitempty"`
@@ -245,9 +252,10 @@ const (
 	KindItem = "item"
 	KindEpic = "epic"
 	KindDoc  = "doc"
+	KindRel  = "release"
 )
 
-var refRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]{0,9})-([EeDd]?)(\d+)$`)
+var refRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]{0,9})-([EeDdRr]?)(\d+)$`)
 var keyRe = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 // Ref is a parsed human reference like API-41, API-E3 or API-D7.
@@ -269,6 +277,8 @@ func ParseRef(s string) (Ref, error) {
 		r.Kind = KindEpic
 	case "D":
 		r.Kind = KindDoc
+	case "R":
+		r.Kind = KindRel
 	}
 	return r, nil
 }
@@ -276,6 +286,7 @@ func ParseRef(s string) (Ref, error) {
 func itemRef(key string, n int) string { return fmt.Sprintf("%s-%d", key, n) }
 func epicRef(key string, n int) string { return fmt.Sprintf("%s-E%d", key, n) }
 func docRef(key string, n int) string  { return fmt.Sprintf("%s-D%d", key, n) }
+func relRef(key string, n int) string  { return fmt.Sprintf("%s-R%d", key, n) }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 

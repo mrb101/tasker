@@ -11,6 +11,19 @@
     <div class="span2 row end"><button class="btn primary">Save</button></div>
   </form>
 
+  <h2>Releases</h2>
+  <form class="panel form-grid" data-api="PATCH /api/projects/{{$p.Key}}" data-then="reload">
+    <label class="span2 check"><input type="radio" name="release_mode" value="date" {{if ne $p.ReleaseMode "scope"}}checked{{end}} data-radio>
+      <span><b>Fixed date</b>: a release ships on its target date with whatever is done; the rest moves to the next release. tasker forecasts how much will make it.</span></label>
+    <label class="span2 check"><input type="radio" name="release_mode" value="scope" {{if eq $p.ReleaseMode "scope"}}checked{{end}} data-radio>
+      <span><b>Fixed scope</b>: a release ships when its stories are done. tasker forecasts the date.</span></label>
+    <label>Rhythm, for fixed dates <select name="release_weeks" data-type="int">
+      {{range $w := (list 0 1 2 3 4 6 8 12)}}<option value="{{$w}}" {{if eq $w $p.ReleaseWeeks}}selected{{end}}>{{if eq $w 0}}none — set each release's dates{{else}}every {{$w}} week{{if ne $w 1}}s{{end}}{{end}}</option>{{end}}
+    </select></label>
+    <p class="muted small">With a rhythm, a new release's dates follow on from the previous one.</p>
+    <div class="span2 row end"><button class="btn primary">Save</button></div>
+  </form>
+
   <h2>Queues</h2>
   <div class="tablewrap"><table class="list">
     <thead><tr><th>Queue</th><th>Base</th><th>Worktree</th><th>Agent</th><th>Status</th><th>Open</th></tr></thead>

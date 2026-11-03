@@ -44,6 +44,7 @@
       <a class="{{if eq .Tab "board"}}on{{end}}" href="/p/{{$k}}"><i>▦</i>Queues</a>
       <a class="{{if eq .Tab "items"}}on{{end}}" href="/p/{{$k}}/items"><i>☰</i>Items{{if .Project.Counts}}<span class="n">{{add .Project.Counts.Inbox (add .Project.Counts.Queued (add .Project.Counts.Active .Project.Counts.Review))}}</span>{{end}}</a>
       <a class="{{if eq .Tab "epics"}}on{{end}}" href="/p/{{$k}}/epics"><i>◆</i>Epics{{if .Project.Counts}}<span class="n">{{.Project.Counts.Epics}}</span>{{end}}</a>
+      <a class="{{if eq .Tab "releases"}}on{{end}}" href="/p/{{$k}}/releases"><i>⚐</i>Releases</a>
       <a class="{{if eq .Tab "docs"}}on{{end}}" href="/p/{{$k}}/docs"><i>¶</i>Docs{{if .Project.Counts}}{{if .Project.Counts.DocsInReview}}<b class="badge">{{.Project.Counts.DocsInReview}}</b>{{end}}{{end}}</a>
       <a class="{{if eq .Tab "activity"}}on{{end}}" href="/p/{{$k}}/activity"><i>↻</i>Activity</a>
       <a class="{{if eq .Tab "settings"}}on{{end}}" href="/p/{{$k}}/settings"><i>⚙</i>Settings</a>
@@ -68,6 +69,8 @@
   <label class="inline">Queue <select data-bulk="queue"><option value="">—</option><option value="__triage">triage (no queue)</option></select></label>
   <label class="inline">Priority <select data-bulk="priority"><option value="">—</option>{{range vocab "priorities"}}<option>{{.}}</option>{{end}}</select></label>
   <label class="inline">Epic <select data-bulk="epic"><option value="">—</option><option value="__none">no epic</option></select></label>
+  <label class="inline">Release <select data-bulk="release"><option value="">—</option><option value="__none">no release</option></select></label>
+  <label class="inline">Plan <select data-bulk="stretch"><option value="">—</option><option value="false">committed</option><option value="true">stretch</option></select></label>
   <label class="inline">Status <select data-bulk="status"><option value="">—</option><option value="done">done</option><option value="cancelled">cancelled</option><option value="inbox">back to triage</option></select></label>
   <span class="bulk-label"><input data-bulk-label placeholder="label" size="8" aria-label="Label"><button type="button" class="btn small" data-bulk-label-op="add">Add</button><button type="button" class="btn small" data-bulk-label-op="remove">Remove</button></span>
   <span class="grow"></span>

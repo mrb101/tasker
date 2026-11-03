@@ -227,6 +227,9 @@ var funcs = template.FuncMap{
 		}
 		return "/p/" + ref
 	},
+	"outlookClass": func(o string) string {
+		return map[string]string{store.OutlookLikely: "ok", store.OutlookMaybe: "maybe", store.OutlookAtRisk: "risk"}[o]
+	},
 	"closed": func(status string) bool { return status == "done" || status == "cancelled" },
 	"vocab": func(name string) []string {
 		switch name {
@@ -484,6 +487,63 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		s.render(w, r, "activity", &Page{Title: p.Key + " activity", Tab: "activity", Project: p, D: map[string]any{"Activity": act}})
 	})
 
+	mux.HandleFunc("GET /p/{key}/releases", func(w http.ResponseWriter, r *http.Request) {
+		p := project(w, r)
+		if p == nil {
+			return
+		}
+		list, err := st.ListReleases(p.Key)
+		if err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		var current, shipped []*store.Release
+		for _, rel := range list {
+			if rel.Status == "shipped" {
+				shipped = append(shipped, rel)
+				continue
+			}
+			full, err := st.GetRelease(rel.Ref) // for its forecast
+			if err != nil {
+				s.webErr(w, r, err)
+				return
+			}
+			current = append(current, full)
+		}
+		s.render(w, r, "releases", &Page{Title: p.Key + " releases", Tab: "releases", Project: p, D: map[string]any{
+			"Current": current, "Shipped": shipped,
+		}})
+	})
+
+	mux.HandleFunc("GET /rel/{ref}", func(w http.ResponseWriter, r *http.Request) {
+		rel, err := st.GetRelease(r.PathValue("ref"))
+		if err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		p, _ := st.GetProject(rel.Project)
+		epics, _ := st.ListEpics(p.Key, false)
+		notes, _ := st.ReleaseNotes(rel.Ref)
+		var later []*store.Release
+		for _, o := range openReleases(st, p.Key) {
+			if o.Ref != rel.Ref {
+				later = append(later, o)
+			}
+		}
+		d := map[string]any{"R": rel, "Epics": epics, "Notes": notes, "Later": later}
+		if len(rel.Weeks) >= 2 {
+			labels := make([]string, len(rel.Weeks))
+			scope := make([]int, len(rel.Weeks))
+			done := make([]int, len(rel.Weeks))
+			for i, wk := range rel.Weeks {
+				labels[i], scope[i], done[i] = wk.Start.Format("Jan 2"), wk.Scope, wk.DoneCum
+			}
+			d["Burnup"] = lineChart(chartW, labels, []series{{"Scope", "s1", scope}, {"Done", "s2", done}}, "Release scope and done stories by week")
+			d["BurnLegend"] = legend([]string{"Scope", "Done"}, []string{"s1", "s2"}, "line")
+		}
+		s.render(w, r, "release", &Page{Title: rel.Ref + " " + rel.Name, Tab: "releases", Project: p, D: d})
+	})
+
 	mux.HandleFunc("GET /p/{key}/settings", func(w http.ResponseWriter, r *http.Request) {
 		p := project(w, r)
 		if p == nil {
@@ -513,7 +573,7 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			s.webErr(w, r, err)
 			return
 		}
-		prefix := map[string]string{store.KindItem: "/i/", store.KindEpic: "/e/", store.KindDoc: "/d/"}[ref.Kind]
+		prefix := map[string]string{store.KindItem: "/i/", store.KindEpic: "/e/", store.KindDoc: "/d/", store.KindRel: "/rel/"}[ref.Kind]
 		http.Redirect(w, r, prefix+strings.ToUpper(r.PathValue("ref")), http.StatusFound)
 	})
 
@@ -527,7 +587,7 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		epics, _ := st.ListEpics(p.Key, true)
 		queues, _ := st.ListQueues(p.Key, false)
 		s.render(w, r, "item", &Page{Title: it.Ref + " " + it.Title, Tab: "items", Project: p, D: map[string]any{
-			"It": it, "Epics": epics, "Queues": queues,
+			"It": it, "Epics": epics, "Queues": queues, "Releases": openReleases(st, p.Key),
 		}})
 	})
 
@@ -649,4 +709,16 @@ func mermaidGraph(e *store.Epic, edges [][2]string) string {
 	b.WriteString("  classDef cancelled fill:#888,color:#fff,stroke:#888\n")
 	b.WriteString("  classDef ext stroke-dasharray: 4 4\n")
 	return b.String()
+}
+
+// openReleases are a project's releases that can still take stories.
+func openReleases(st *store.Store, key string) []*store.Release {
+	list, _ := st.ListReleases(key)
+	var out []*store.Release
+	for _, r := range list {
+		if r.Status != "shipped" {
+			out = append(out, r)
+		}
+	}
+	return out
 }
