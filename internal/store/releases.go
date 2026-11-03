@@ -586,7 +586,8 @@ func (s *Store) weeklyThroughput(projectID int64, n int) (samples, dropped []int
 const trials = 4000
 
 // forecast simulates the coming weeks by drawing each week's throughput from
-// the samples. It assumes the project's work goes to this release.
+// the samples. It assumes the project's work goes to this release from its
+// start date on.
 //
 // Releases without a fixed date are worked one after another, so a release's
 // finish date also waits for `ahead`: the open stories of the releases before it.
@@ -607,25 +608,43 @@ func forecast(mode string, r *Release, open []*Item, ahead int, samples, dropped
 	draw := func() int { return samples[rng.Intn(len(samples))] }
 	pick := func(sorted []int, p float64) int { return sorted[int(float64(len(sorted)-1)*p)] }
 
+	// Work on a release does not begin before its start date.
+	today := time.Now().UTC()
+	from := today
+	if start, err := time.Parse(dateLayout, r.StartsOn); err == nil && start.After(from) {
+		from = start
+	}
+	startDays := int(math.Ceil(from.Sub(today).Hours() / 24))
+
 	if mode == "scope" || r.TargetOn == "" {
-		weeks := make([]int, trials)
-		for i := range weeks {
+		days := make([]int, trials)
+		for i := range days {
+			// First the stories of the releases ahead, then this release's own,
+			// from whichever comes later: the work ahead done, or the start date.
 			done, w := 0, 0
-			for done < ahead+len(open) && w < 520 {
+			for done < ahead && w < 520 {
 				done += draw()
 				w++
 			}
-			weeks[i] = w
+			begin, own := 7*w, done-ahead // a week's spare throughput carries over...
+			if begin < startDays {
+				begin, own = startDays, 0 // ...unless the release has not started yet
+			}
+			w = 0
+			for own < len(open) && w < 520 {
+				own += draw()
+				w++
+			}
+			days[i] = begin + 7*w
 		}
-		sort.Ints(weeks)
-		today := time.Now().UTC()
-		f.Date50 = today.AddDate(0, 0, 7*pick(weeks, .5)).Format(dateLayout)
-		f.Date85 = today.AddDate(0, 0, 7*pick(weeks, .85)).Format(dateLayout)
+		sort.Ints(days)
+		f.Date50 = today.AddDate(0, 0, pick(days, .5)).Format(dateLayout)
+		f.Date85 = today.AddDate(0, 0, pick(days, .85)).Format(dateLayout)
 		return f, outlook
 	}
 
 	target, _ := time.Parse(dateLayout, r.TargetOn)
-	f.WeeksLeft = math.Max(0, target.AddDate(0, 0, 1).Sub(time.Now().UTC()).Hours()/(24*7))
+	f.WeeksLeft = math.Max(0, target.AddDate(0, 0, 1).Sub(from).Hours()/(24*7))
 	whole, frac := math.Floor(f.WeeksLeft), f.WeeksLeft-math.Floor(f.WeeksLeft)
 	totals := make([]int, trials)
 	for i := range totals {

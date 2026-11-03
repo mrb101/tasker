@@ -470,3 +470,30 @@ func TestScopeReleasesQueueUp(t *testing.T) {
 		prev = f.Date50
 	}
 }
+
+func TestForecastWaitsForStartDate(t *testing.T) {
+	s := newStore(t)
+	scope := "scope"
+	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
+	for w := 1; w <= 4; w++ { // five stories a week
+		for i := 0; i < 5; i++ {
+			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
+			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339), it.ID)
+		}
+	}
+	start := time.Now().UTC().AddDate(0, 0, 60).Format(dateLayout)
+	r := must(s.CreateRelease("me", "API", ReleaseInput{StartsOn: start}))
+	ref := r.Ref
+	var refs []string
+	for j := 0; j < 10; j++ { // two weeks of work
+		refs = append(refs, must(s.CreateItem("me", "API", ItemInput{Title: "t"})).Ref)
+	}
+	must(s.BulkUpdate("me", "API", refs, ItemPatch{Release: &ref}))
+	f := must(s.GetRelease(ref)).Forecast
+	if f.Date50 <= start {
+		t.Fatalf("likely done %s, before the release starts %s", f.Date50, start)
+	}
+	if want := time.Now().UTC().AddDate(0, 0, 60+14).Format(dateLayout); f.Date50 != want {
+		t.Fatalf("likely done %s, want %s (start + two weeks)", f.Date50, want)
+	}
+}
