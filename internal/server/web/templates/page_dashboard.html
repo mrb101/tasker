@@ -1,0 +1,117 @@
+{{define "content"}}
+{{$p := .Project}}{{$v := .D}}{{$d := $v.D}}
+<div class="page wide dash">
+  <div class="head">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="muted small">{{$p.Name}} · last {{$d.Days}} days · counts are stories; "now" tiles ignore the period</p>
+    </div>
+  </div>
+
+  <nav class="periods" aria-label="Period">
+    {{range $n := (list 30 90 180 365)}}<a href="?days={{$n}}" class="{{if eq $n $d.Days}}on{{end}}">{{if eq $n 365}}1 year{{else}}{{$n}} days{{end}}</a>{{end}}
+  </nav>
+
+  <section class="kpis">
+    <div class="kpi hero">
+      <div class="kpi-label">Done in the last {{$d.Days}} days</div>
+      <div class="kpi-value">{{$d.Done}}</div>
+      <div class="kpi-sub">
+        {{if gt $v.Delta 0}}<span class="up">▲ {{$v.Delta}}</span>{{else if lt $v.Delta 0}}<span class="down">▼ {{neg $v.Delta}}</span>{{else}}<span class="muted">no change</span>{{end}}
+        <span class="muted">vs the {{$d.Days}} days before ({{$d.DonePrev}})</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Open now</div>
+      <div class="kpi-value">{{$d.Open}}</div>
+      <div class="kpi-sub muted">{{$d.Triage}} triage · {{$d.Queued}} queued · {{$d.Active}} active · {{$d.Review}} in review</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Blocked now</div>
+      <div class="kpi-value">{{$d.Blocked}}</div>
+      <div class="kpi-sub muted">open stories waiting on another</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Cycle time, start to done</div>
+      <div class="kpi-value">{{$v.Cycle50}}</div>
+      <div class="kpi-sub muted">median · 85% within {{$v.Cycle85}} · {{$d.CycleN}} stories</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Waiting for review now</div>
+      <div class="kpi-value">{{$d.DocsWaiting}}</div>
+      <div class="kpi-sub muted">{{if $d.DocsWaiting}}longest {{$v.OldestWait}} · {{end}}median decision {{$v.ReviewTurn}}</div>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+    <section class="panel chart-card wide2">
+      <header><h2>Scope and done</h2><p class="muted small">All stories created vs all done, at the end of each week. The gap is what is left.</p></header>
+      {{$v.LineLegend}}
+      {{$v.Burnup}}
+      <details class="table-view"><summary>Table</summary>
+        <div class="tablewrap"><table class="list"><thead><tr><th>Week of</th><th class="num">Scope</th><th class="num">Done</th><th class="num">Left</th></tr></thead>
+        <tbody>{{range $i, $w := $v.Weeks}}<tr><td>{{$w}}</td><td class="num">{{index $v.Scope $i}}</td><td class="num">{{index $v.DoneCum $i}}</td><td class="num">{{sub (index $v.Scope $i) (index $v.DoneCum $i)}}</td></tr>{{end}}</tbody></table></div>
+      </details>
+    </section>
+
+    <section class="panel chart-card">
+      <header><h2>Done per week</h2><p class="muted small">Throughput: stories finished each week.</p></header>
+      {{$v.Throughput}}
+      <details class="table-view"><summary>Table</summary>
+        <div class="tablewrap"><table class="list"><thead><tr><th>Week of</th><th class="num">Done</th></tr></thead>
+        <tbody>{{range $i, $w := $v.Weeks}}<tr><td>{{$w}}</td><td class="num">{{index $v.DonePerWeek $i}}</td></tr>{{end}}</tbody></table></div>
+      </details>
+    </section>
+
+    <section class="panel chart-card">
+      <header><h2>Cycle time</h2><p class="muted small">From <code>tasker start</code> to done, for stories finished in the period.</p></header>
+      {{if $d.CycleN}}
+        {{$v.CycleHist}}
+        <details class="table-view"><summary>Table</summary>
+          <div class="tablewrap"><table class="list"><thead><tr><th>Took</th><th class="num">Stories</th></tr></thead>
+          <tbody>{{range $i, $l := $v.BinLabels}}<tr><td>{{$l}}</td><td class="num">{{index $v.BinCounts $i}}</td></tr>{{end}}</tbody></table></div>
+        </details>
+      {{else}}<p class="empty">No story was started and finished in this period yet. Cycle time needs <code>tasker start</code>, then done.</p>{{end}}
+    </section>
+
+    <section class="panel chart-card wide2">
+      <header><h2>Progress by epic</h2><p class="muted small">Open epics, in epic order. Each bar is that epic's own stories; the count says how many.</p></header>
+      {{if $d.Epics}}
+        {{$v.EpicLegend}}
+        {{$v.EpicBars}}
+        <details class="table-view"><summary>Table</summary>
+          <div class="tablewrap"><table class="list"><thead><tr><th>Epic</th><th class="num">Done</th><th class="num">In progress</th><th class="num">Waiting</th></tr></thead>
+          <tbody>{{range $d.Epics}}<tr><td><a class="ref" href="/e/{{.Ref}}">{{.Ref}}</a> {{.Title}}</td><td class="num">{{.Done}}</td><td class="num">{{.InProgress}}</td><td class="num">{{.Waiting}}</td></tr>{{end}}</tbody></table></div>
+        </details>
+      {{else}}<p class="empty">No open epics.</p>{{end}}
+    </section>
+
+    <section class="panel chart-card">
+      <header><h2>Work in progress by queue</h2><p class="muted small">What each worktree holds now.</p></header>
+      {{if $v.HasQueues}}
+        {{if $v.QueueBars}}{{$v.QueueLegend}}{{$v.QueueBars}}{{else}}<p class="empty">Every queue is empty.</p>{{end}}
+        <details class="table-view"><summary>Table</summary>
+          <div class="tablewrap"><table class="list"><thead><tr><th>Queue</th><th class="num">Active</th><th class="num">In review</th><th class="num">Queued</th><th class="num">Blocked</th></tr></thead>
+          <tbody>{{range $v.QueueRows}}<tr><td><a href="/q/{{$p.Key}}/{{.Name}}">{{.Name}}</a></td><td class="num">{{.Active}}</td><td class="num">{{.Review}}</td><td class="num">{{.Queued}}</td><td class="num">{{.Blocked}}</td></tr>{{end}}</tbody></table></div>
+        </details>
+      {{else}}<p class="empty">No queues yet. A queue is one worktree; <a href="/p/{{$p.Key}}">create one on the board</a>.</p>{{end}}
+    </section>
+
+    <section class="panel chart-card">
+      <header><h2>Oldest work in progress</h2><p class="muted small">Active or in review, longest since it started.</p></header>
+      {{if $d.Aging}}
+      <div class="tablewrap"><table class="list aging"><thead><tr><th>Story</th><th>Status</th><th>Queue</th><th>Who</th><th class="num">Age</th></tr></thead>
+        <tbody>{{range $d.Aging}}<tr><td class="title" title="{{.Title}}"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a> {{.Title}}</td><td>{{template "status" .Status}}</td><td class="muted nowrap">{{.Queue}}</td><td class="muted">{{.Who}}</td><td class="num">{{hours .AgeHours}}</td></tr>{{end}}</tbody></table></div>
+      {{else}}<p class="empty">Nothing is in progress.</p>{{end}}
+    </section>
+
+    <section class="panel chart-card">
+      <header><h2>Who did what</h2><p class="muted small">Recorded actions in the period, by person or agent.</p></header>
+      {{if $d.Actors}}
+        {{$v.ActorBars}}
+        <p class="muted small">Plan and document reviews decided: {{$d.Decisions}} ({{$d.Approved}} approved, {{$d.ChangesAsked}} sent back).</p>
+      {{else}}<p class="empty">No activity in this period.</p>{{end}}
+    </section>
+  </div>
+</div>
+{{end}}

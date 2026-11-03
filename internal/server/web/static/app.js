@@ -226,6 +226,32 @@
     if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); stepPeek(-1); }
   });
 
+  // ---- chart tooltips: any [data-tip] mark, on hover and on keyboard focus ----
+  function showTip(el, x, y) {
+    const tip = $('#tip');
+    tip.textContent = el.dataset.tip; // labels are data: textContent, never innerHTML
+    tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    let left = x + 14, top = y + 14;
+    if (left + r.width > innerWidth - 8) left = x - r.width - 14;
+    if (top + r.height > innerHeight - 8) top = y - r.height - 14;
+    tip.style.left = Math.max(8, left) + 'px';
+    tip.style.top = Math.max(8, top) + 'px';
+  }
+  function hideTip() { $('#tip').hidden = true; }
+  document.addEventListener('pointermove', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el) showTip(el, e.clientX, e.clientY); else if (!$('#tip').hidden) hideTip();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    showTip(el, r.left + r.width / 2, r.top);
+  });
+  document.addEventListener('focusout', hideTip);
+  document.addEventListener('scroll', hideTip, true);
+
   // ---- sidebar: mobile toggle, close the project switcher on outside click ----
   document.addEventListener('click', (e) => {
     if (e.target.closest('#navtoggle')) { $('#sidenav').classList.toggle('open'); return; }

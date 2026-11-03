@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func newStore(t *testing.T) *Store {
@@ -220,5 +221,43 @@ func TestBoardCapsColumns(t *testing.T) {
 	}
 	if q.OpenCount != 4 || len(q.InReview) != 1 || len(q.RecentDone) != 1 {
 		t.Fatalf("open %d review %d done %d", q.OpenCount, len(q.InReview), len(q.RecentDone))
+	}
+}
+
+func TestDashboard(t *testing.T) {
+	s := newStore(t)
+	must(s.CreateQueue("me", "API", QueueInput{Name: "lane"}))
+	ep := must(s.CreateEpic("me", "API", "Auth", ""))
+	a := must(s.CreateItem("me", "API", ItemInput{Title: "a", Epic: ep.Ref, Queue: "lane"}))
+	b := must(s.CreateItem("me", "API", ItemInput{Title: "b", Epic: ep.Ref, Queue: "lane"}))
+	must(s.CreateItem("me", "API", ItemInput{Title: "c", Epic: ep.Ref, BlockedBy: []string{b.Ref}}))
+	must(s.Start("bot", a.Ref, StartInput{}))
+	// pretend a started 3 days ago
+	if _, err := s.db.Exec(`UPDATE activity SET created_at = ? WHERE ref = ? AND action = 'item.started'`,
+		time.Now().UTC().Add(-72*time.Hour).Format(time.RFC3339), a.Ref); err != nil {
+		t.Fatal(err)
+	}
+	must(s.Finish("bot", a.Ref, FinishInput{Status: "done"}))
+	must(s.Start("bot", b.Ref, StartInput{}))
+
+	d := must(s.ProjectDashboard("API", 30))
+	if d.Done != 1 || d.Open != 2 || d.Active != 1 || d.Triage != 1 || d.Blocked != 1 || d.Created != 3 {
+		t.Fatalf("counts: %+v", d)
+	}
+	if d.CycleN != 1 || d.CycleP50H < 71 || d.CycleP50H > 73 || d.CycleBins[2].Count != 1 {
+		t.Fatalf("cycle: n=%d p50=%.1f bins=%v", d.CycleN, d.CycleP50H, d.CycleBins)
+	}
+	if len(d.Epics) != 1 || d.Epics[0].Done != 1 || d.Epics[0].InProgress != 1 || d.Epics[0].Waiting != 1 {
+		t.Fatalf("epics: %+v", d.Epics)
+	}
+	if len(d.Queues) != 1 || d.Queues[0].Active != 1 || len(d.Aging) != 1 || d.Aging[0].Ref != b.Ref {
+		t.Fatalf("queues/aging: %+v %+v", d.Queues, d.Aging)
+	}
+	last := d.Weeks[len(d.Weeks)-1]
+	if last.Scope != 3 || last.DoneCum != 1 {
+		t.Fatalf("burnup end: %+v", last)
+	}
+	if HumanHours(72) != "3d" || HumanHours(5) != "5h" || HumanHours(0) != "—" {
+		t.Fatalf("human hours: %s %s", HumanHours(72), HumanHours(5))
 	}
 }

@@ -173,10 +173,21 @@ var funcs = template.FuncMap{
 	},
 	"checklist": func(s string) []int { d, t := render.Checklist(s); return []int{d, t} },
 	"add":       func(a, b int) int { return a + b },
-	"join":      strings.Join,
-	"upper":     strings.ToUpper,
-	"lower":     strings.ToLower,
-	"eq2":       func(a, b any) bool { return fmt.Sprint(a) == fmt.Sprint(b) },
+	"sub":       func(a, b int) int { return a - b },
+	"neg":       func(a int) int { return -a },
+	"list":      func(v ...int) []int { return v },
+	"hours":     store.HumanHours,
+	// shortRef turns API-E12 into E12 (the project is already on screen).
+	"shortRef": func(ref string) string {
+		if i := strings.LastIndex(ref, "-"); i >= 0 {
+			return ref[i+1:]
+		}
+		return ref
+	},
+	"join":  strings.Join,
+	"upper": strings.ToUpper,
+	"lower": strings.ToLower,
+	"eq2":   func(a, b any) bool { return fmt.Sprint(a) == fmt.Sprint(b) },
 	"has": func(list []string, v string) bool {
 		for _, x := range list {
 			if x == v {
@@ -368,6 +379,25 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		s.render(w, r, "board", &Page{Title: p.Key + " board", Tab: "board", Project: p, D: map[string]any{
 			"Queues": full, "Inbox": inbox, "InboxMore": p.Counts.Inbox - len(inbox), "Loose": loose, "Epics": epics,
 		}})
+	})
+
+	mux.HandleFunc("GET /p/{key}/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		p := project(w, r)
+		if p == nil {
+			return
+		}
+		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+		switch days {
+		case 30, 90, 180, 365:
+		default:
+			days = 90
+		}
+		d, err := st.ProjectDashboard(p.Key, days)
+		if err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		s.render(w, r, "dashboard", &Page{Title: p.Key + " dashboard", Tab: "dashboard", Project: p, D: dashboardView(p.Key, d)})
 	})
 
 	mux.HandleFunc("GET /p/{key}/items", func(w http.ResponseWriter, r *http.Request) {

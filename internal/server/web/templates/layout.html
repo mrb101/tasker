@@ -40,6 +40,7 @@
 
     <nav class="navlinks">
       {{if .Project}}{{$k := .Project.Key}}
+      <a class="{{if eq .Tab "dashboard"}}on{{end}}" href="/p/{{$k}}/dashboard"><i>▤</i>Dashboard</a>
       <a class="{{if eq .Tab "board"}}on{{end}}" href="/p/{{$k}}"><i>▦</i>Queues</a>
       <a class="{{if eq .Tab "items"}}on{{end}}" href="/p/{{$k}}/items"><i>☰</i>Items{{if .Project.Counts}}<span class="n">{{add .Project.Counts.Inbox (add .Project.Counts.Queued (add .Project.Counts.Active .Project.Counts.Review))}}</span>{{end}}</a>
       <a class="{{if eq .Tab "epics"}}on{{end}}" href="/p/{{$k}}/epics"><i>◆</i>Epics{{if .Project.Counts}}<span class="n">{{.Project.Counts.Epics}}</span>{{end}}</a>
@@ -61,6 +62,7 @@
 <main id="main">{{template "content" .}}</main>
 </div>
 <dialog id="peek" aria-label="Item quick view"></dialog>
+<div id="tip" role="tooltip" hidden></div>
 <div id="toast" hidden></div>
 <div id="live" hidden><button>New changes — refresh</button></div>
 </body>
