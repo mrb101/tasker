@@ -14,6 +14,7 @@ import (
 
 const (
 	chartW   = 640 // default drawing width; wide charts pass their own
+	narrowW  = 380 // drawing width for phones, where a wide drawing's text would shrink unreadably
 	chartH   = 220
 	padL     = 40
 	padR     = 96 // room for end labels
@@ -23,6 +24,16 @@ const (
 )
 
 var esc = template.HTMLEscapeString
+
+// responsive draws a chart twice, at width and at phone width; CSS shows one.
+// SVG text scales with the drawing, so one drawing cannot be readable at both.
+func responsive(width int, draw func(width int) template.HTML) template.HTML {
+	wide := draw(width)
+	if wide == "" {
+		return ""
+	}
+	return template.HTML(`<div class="chart-wide">`) + wide + `</div><div class="chart-narrow">` + draw(narrowW) + `</div>`
+}
 
 // niceMax rounds a maximum up to a clean axis top and returns it with a tick step.
 func niceMax(v int) (int, int) {
@@ -86,7 +97,7 @@ func lineChart(width int, labels []string, ss []series, ariaLabel string) templa
 	var b strings.Builder
 	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, width, chartH, esc(ariaLabel))
 	y := yAxis(&b, top, step, plotW)
-	xTicks(&b, labels, x)
+	xTicks(&b, labels, x, plotW)
 	for _, s := range ss {
 		var pts []string
 		for i, v := range s.Values {
@@ -129,7 +140,7 @@ func lineChart(width int, labels []string, ss []series, ariaLabel string) templa
 }
 
 // columnChart: one series of columns; labels the tallest and the last column.
-func columnChart(labels []string, values []int, unit, ariaLabel string) template.HTML {
+func columnChart(width int, labels []string, values []int, unit, ariaLabel string) template.HTML {
 	if len(labels) == 0 {
 		return ""
 	}
@@ -140,14 +151,14 @@ func columnChart(labels []string, values []int, unit, ariaLabel string) template
 		}
 	}
 	top, step := niceMax(maxV)
-	plotW := float64(chartW - padL - 16)
+	plotW := float64(width - padL - 16)
 	band := plotW / float64(len(labels))
 	bw := math.Min(barMaxPx, band*0.6)
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, chartW, chartH, esc(ariaLabel))
+	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, width, chartH, esc(ariaLabel))
 	y := yAxis(&b, top, step, plotW)
 	cx := func(i int) float64 { return float64(padL) + band*float64(i) + band/2 }
-	xTicks(&b, labels, cx)
+	xTicks(&b, labels, cx, plotW)
 	base := y(0)
 	for i, v := range values {
 		tip := fmt.Sprintf("%s\n%s %s", labels[i], comma(v), unit)
@@ -166,11 +177,14 @@ func columnChart(labels []string, values []int, unit, ariaLabel string) template
 	return template.HTML(b.String())
 }
 
-// xTicks labels at most ~8 positions so the axis never crowds.
-func xTicks(b *strings.Builder, labels []string, x func(int) float64) {
-	every := max(1, int(math.Ceil(float64(len(labels))/8)))
+// xTicks labels at most ~8 positions, fewer on a narrow drawing, so the axis never crowds.
+func xTicks(b *strings.Builder, labels []string, x func(int) float64, plotW float64) {
+	most := min(8, max(3, int(plotW/56)))
+	every := max(1, int(math.Ceil(float64(len(labels))/float64(most))))
+	last := len(labels) - 1
 	for i, l := range labels {
-		if i%every != 0 && i != len(labels)-1 {
+		// the last label always shows; a regular one too close to it would overlap
+		if i != last && (i%every != 0 || last-i < every) {
 			continue
 		}
 		fmt.Fprintf(b, `<text class="tick" x="%.1f" y="%d" text-anchor="middle">%s</text>`, x(i), chartH-8, esc(l))

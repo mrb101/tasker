@@ -13,7 +13,8 @@
 <aside class="sidenav" id="sidenav">
   <div class="side-top">
     <a class="brand" href="/"><span class="logo"></span>tasker</a>
-    <button class="navtoggle" type="button" aria-label="Menu" id="navtoggle">☰</button>
+    {{if .Project}}<a class="top-project" href="/p/{{.Project.Key}}"><span class="pkey">{{.Project.Key}}</span>{{with .Tab}}<span class="muted">{{if eq . "board"}}queues{{else}}{{.}}{{end}}</span>{{end}}</a>{{end}}
+    <button class="navtoggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebody" id="navtoggle">☰</button>
   </div>
   <div class="side-body" id="sidebody">
     <details class="switcher">

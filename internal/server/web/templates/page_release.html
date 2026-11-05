@@ -79,7 +79,7 @@
       <h2>Stories <span class="count">{{$r.Total}}</span></h2>
       <p class="muted small">In the order they will likely be worked: in progress, then commitments, then queue order, then priority. Tick stories and use the bar to change many at once.</p>
       {{if $r.Items}}
-      <div class="tablewrap"><table class="list">
+      <div class="tablewrap"><table class="list stack">
         <thead><tr><th class="selcol"><input type="checkbox" class="selall" data-selall aria-label="Select all rows"></th><th>Story</th><th>Status</th><th>Plan</th>{{if ne $r.Status "shipped"}}<th>Outlook</th>{{end}}<th>Epic</th><th>Queue</th></tr></thead>
         <tbody>{{range $r.Items}}
           <tr class="{{if closed .Status}}isdone{{end}}">

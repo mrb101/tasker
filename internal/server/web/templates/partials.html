@@ -44,7 +44,7 @@
 
 {{define "itemtable"}}
 {{if .}}
-<div class="tablewrap"><table class="list">
+<div class="tablewrap"><table class="list stack">
 <thead><tr><th class="selcol"><input type="checkbox" class="selall" data-selall aria-label="Select all rows"></th><th>Item</th><th>Title</th><th>Status</th><th>Queue</th><th>Epic</th><th>Assignee</th><th>Updated</th></tr></thead>
 <tbody>{{range .}}{{template "itemrow" .}}{{end}}</tbody>
 </table></div>
@@ -65,7 +65,7 @@
 
 {{define "doctable"}}
 {{if .}}
-<div class="tablewrap"><table class="list">
+<div class="tablewrap"><table class="list stack">
 <thead><tr><th>Doc</th><th>Title</th><th>Status</th><th>Rev</th><th>Author</th><th>Updated</th></tr></thead>
 <tbody>{{range .}}{{template "docrow" .}}{{end}}</tbody>
 </table></div>

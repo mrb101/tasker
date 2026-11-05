@@ -438,7 +438,13 @@
 
   // ---- sidebar: mobile toggle, close the project switcher on outside click ----
   document.addEventListener('click', (e) => {
-    if (e.target.closest('#navtoggle')) { $('#sidenav').classList.toggle('open'); return; }
+    if (e.target.closest('#navtoggle')) {
+      const open = $('#sidenav').classList.toggle('open');
+      $('#navtoggle').setAttribute('aria-expanded', open);
+      return;
+    }
+    const nav = $('#sidenav.open');
+    if (nav && !e.target.closest('#sidenav')) { nav.classList.remove('open'); $('#navtoggle').setAttribute('aria-expanded', false); }
     const sw = $('.switcher[open]');
     if (sw && !e.target.closest('.switcher')) sw.open = false;
   });

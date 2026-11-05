@@ -15,7 +15,7 @@
     <h2>Items in review <span class="count">{{len .D.Items}}</span></h2>
     <p class="muted small">Finished work waiting to merge (PR open).</p>
     {{if .D.Items}}
-    <div class="tablewrap"><table class="list">
+    <div class="tablewrap"><table class="list stack">
       <thead><tr><th>Item</th><th>Title</th><th>Branch</th><th>PR</th><th>Queue</th><th>Updated</th></tr></thead>
       <tbody>{{range .D.Items}}
         <tr><td class="nowrap">{{template "type" .Type}} <a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a></td>

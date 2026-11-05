@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"html/template"
 	"time"
 
 	"github.com/mrb101/tasker/internal/store"
@@ -47,10 +48,15 @@ func dashboardView(key string, d *store.Dashboard) map[string]any {
 		"Weeks": weeks, "Scope": scope, "DoneCum": doneCum, "DonePerWeek": donePerWeek,
 		"BinLabels": binLabels, "BinCounts": binCounts,
 
-		"Burnup": lineChart(1000, weeks, []series{{"Scope", "s1", scope}, {"Done", "s2", doneCum}},
-			"Scope and done stories, cumulative, by week"),
-		"Throughput":  columnChart(weeks, donePerWeek, "done", "Stories done per week"),
-		"CycleHist":   columnChart(binLabels, binCounts, "stories", "Cycle time, start to done"),
+		"Burnup": responsive(1000, func(w int) template.HTML {
+			return lineChart(w, weeks, []series{{"Scope", "s1", scope}, {"Done", "s2", doneCum}}, "Scope and done stories, cumulative, by week")
+		}),
+		"Throughput": responsive(chartW, func(w int) template.HTML {
+			return columnChart(w, weeks, donePerWeek, "done", "Stories done per week")
+		}),
+		"CycleHist": responsive(chartW, func(w int) template.HTML {
+			return columnChart(w, binLabels, binCounts, "stories", "Cycle time, start to done")
+		}),
 		"EpicBars":    stackBars(epicRows, []string{"Done", "In progress", "Waiting"}, []string{"s1", "s2", "rest"}, true, "Progress by epic"),
 		"EpicLegend":  legend([]string{"Done", "In progress", "Waiting"}, []string{"s1", "s2", "rest"}, "rect"),
 		"QueueBars":   stackBars(queueRows, []string{"Active", "In review", "Queued"}, []string{"s1", "s2", "s3"}, false, "Work in progress by queue"),

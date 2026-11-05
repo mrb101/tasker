@@ -550,7 +550,9 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			for i, wk := range rel.Weeks {
 				labels[i], scope[i], done[i] = wk.Start.Format("Jan 2"), wk.Scope, wk.DoneCum
 			}
-			d["Burnup"] = lineChart(chartW, labels, []series{{"Scope", "s1", scope}, {"Done", "s2", done}}, "Release scope and done stories by week")
+			d["Burnup"] = responsive(chartW, func(w int) template.HTML {
+				return lineChart(w, labels, []series{{"Scope", "s1", scope}, {"Done", "s2", done}}, "Release scope and done stories by week")
+			})
 			d["BurnLegend"] = legend([]string{"Scope", "Done"}, []string{"s1", "s2"}, "line")
 		}
 		s.render(w, r, "release", &Page{Title: rel.Ref + " " + rel.Name, Tab: "releases", Project: p, D: d})

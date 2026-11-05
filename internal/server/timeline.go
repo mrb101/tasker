@@ -93,9 +93,16 @@ func releaseTimeline(rels []*store.Release, now time.Time) template.HTML {
 			ticks = append(ticks, t)
 		}
 	}
-	tickLabel := fmtDay
+	tickLabel := func(t time.Time) string { return esc(fmtDay(t)) }
 	if len(ticks) > 0 && ticks[0].Day() == 1 && hi.Sub(lo) > 120*24*time.Hour {
-		tickLabel = func(t time.Time) string { return t.Format("Jan 2006") }
+		// The year hides on phones except in January, so month labels fit.
+		tickLabel = func(t time.Time) string {
+			yr := "yr"
+			if t.Month() == time.January {
+				yr = ""
+			}
+			return fmt.Sprintf(`%s<span class="%s"> %d</span>`, t.Format("Jan"), yr, t.Year())
+		}
 	}
 
 	var b strings.Builder
@@ -106,7 +113,7 @@ func releaseTimeline(rels []*store.Release, now time.Time) template.HTML {
 		if d := pos(t) - pos(today); d > -4 && d < 4 {
 			continue // the "today" label sits there
 		}
-		fmt.Fprintf(&b, `<span class="tl-tick" style="left:%.2f%%">%s</span>`, pos(t), esc(tickLabel(t)))
+		fmt.Fprintf(&b, `<span class="tl-tick" style="left:%.2f%%">%s</span>`, pos(t), tickLabel(t))
 	}
 	fmt.Fprintf(&b, `<span class="tl-todaylabel" style="left:%.2f%%">today</span>`, pos(today))
 	b.WriteString(`</div></div>`)
