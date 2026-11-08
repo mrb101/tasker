@@ -57,7 +57,7 @@
             <p class="big">By <b>{{$r.TargetOn}}</b>: <b>{{.Likely85}}</b> more stories with 85% confidence, <b>{{.Likely50}}</b> at even odds — of <b>{{.Remaining}}</b> still open.</p>
             {{if lt .Likely85 .Remaining}}<p>{{if lt .Likely85 $r.Committed}}<b>The commitments do not fit.</b> Move some to stretch or to the next release, or the date will ship without them.{{else}}The commitments fit; the stretch goals are the ones at stake.{{end}}</p>{{end}}
           {{end}}
-          {{if .Enough}}<p class="muted small">Simulated 4,000 times from stories finished per week over the last {{len .Samples}} weeks ({{range $i, $v := .Samples}}{{if $i}}, {{end}}{{$v}}{{end}}){{if .Dropped}}, leaving out {{range $i, $v := .Dropped}}{{if $i}}, {{end}}{{$v}}{{end}} as one-off bulk closes{{end}}. It assumes the project's work goes to this release.</p>{{end}}
+          {{if .Enough}}<p class="muted small">Simulated 4,000 times from stories finished per week over {{len .Samples}} weeks ({{range $i, $v := .Samples}}{{if $i}}, {{end}}{{$v}}{{end}}){{if .ThisWeek}}, the last being this week's pace so far{{end}}. Only stories that were started count, so bulk closes and imports do not. It assumes the project's work goes to this release.</p>{{end}}
         {{end}}{{end}}
       </section>
       {{end}}

@@ -48,8 +48,8 @@ type Release struct {
 type Forecast struct {
 	Mode      string  `json:"mode"`
 	Enough    bool    `json:"enough_history"`
-	Samples   []int   `json:"weekly_done"` // the weeks it draws from, oldest first
-	Dropped   []int   `json:"dropped"`     // weeks left out as outliers (bulk closes, imports)
+	Samples   []int   `json:"weekly_done"`         // the weeks it draws from, oldest first
+	ThisWeek  bool    `json:"this_week,omitempty"` // the last sample is this week's pace so far
 	Remaining int     `json:"remaining"`
 	Ahead     int     `json:"ahead,omitempty"` // scope mode: open stories in releases worked before this one
 	WeeksLeft float64 `json:"weeks_left,omitempty"`
@@ -466,7 +466,7 @@ func (s *Store) GetRelease(ref string) (*Release, error) {
 		}
 	}
 	if r.Status != "shipped" {
-		samples, dropped, err := s.weeklyThroughput(pr.ID, 8)
+		samples, thisWeek, err := s.weeklyThroughput(pr.ID, 8)
 		if err != nil {
 			return nil, err
 		}
@@ -476,7 +476,7 @@ func (s *Store) GetRelease(ref string) (*Release, error) {
 				return nil, err
 			}
 		}
-		r.Forecast, r.Outlook = forecast(pr.ReleaseMode, r, open, ahead, samples, dropped)
+		r.Forecast, r.Outlook = forecast(pr.ReleaseMode, r, open, ahead, samples, thisWeek)
 		if r.Risks, err = s.releaseRisks(pr, r, open); err != nil {
 			return nil, err
 		}
@@ -535,52 +535,50 @@ func sortPlanOrder(items []*Item) {
 	})
 }
 
-// weeklyThroughput returns stories done in each of the last n complete weeks
-// (from the first week anything was done), leaving out weeks far above the
-// rest (bulk closes, imports): more than three times the median of the
-// non-empty weeks.
-func (s *Store) weeklyThroughput(projectID int64, n int) (samples, dropped []int, err error) {
-	thisWeek := weekStart(time.Now())
-	from := thisWeek.AddDate(0, 0, -7*n)
-	counts := make([]int, n)
-	rows, err := s.db.Query(`SELECT closed_at FROM items WHERE project_id = ? AND status = 'done' AND closed_at >= ? AND closed_at < ?`,
-		projectID, from.Format(time.RFC3339), thisWeek.Format(time.RFC3339))
+// weeklyThroughput returns the stories worked and finished in each of the
+// last n complete weeks (from the first week anything was finished), then
+// this week's so far, scaled up to a whole week by the days elapsed. Stories
+// closed without ever being started (bulk closes, imports) are not counted.
+func (s *Store) weeklyThroughput(projectID int64, n int) (samples []int, thisWeek bool, err error) {
+	now := time.Now().UTC()
+	week := weekStart(now)
+	from := week.AddDate(0, 0, -7*n)
+	counts := make([]int, n+1) // the last one is this week
+	rows, err := s.db.Query(`SELECT i.closed_at FROM items i JOIN projects p ON p.id = i.project_id
+		WHERE i.project_id = ? AND i.status = 'done' AND i.closed_at >= ?
+		AND EXISTS (SELECT 1 FROM activity a WHERE a.project_id = i.project_id AND a.ref = p.key || '-' || i.number
+			AND a.created_at <= i.closed_at
+			AND (a.action = 'item.started' OR (a.action = 'item.updated' AND (a.detail LIKE '%status=active%' OR a.detail LIKE '%status=review%'))))`,
+		projectID, from.Format(time.RFC3339))
 	if err != nil {
-		return nil, nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var ts string
 		rows.Scan(&ts)
 		if t, ok := parseTS(ts); ok {
-			if i := int(weekStart(t).Sub(from).Hours() / (24 * 7)); i >= 0 && i < n {
+			if i := int(weekStart(t).Sub(from).Hours() / (24 * 7)); i >= 0 && i <= n {
 				counts[i]++
 			}
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	// A week just begun with nothing finished yet says nothing about the pace.
+	if c := counts[n]; c == 0 {
+		counts = counts[:n]
+	} else {
+		days := math.Max(1, now.Sub(week).Hours()/24)
+		counts[n] = int(math.Round(float64(c) * 7 / days))
+		thisWeek = true
 	}
 	// Weeks before anything was ever finished are no history at all, not zeros.
 	for len(counts) > 0 && counts[0] == 0 {
 		counts = counts[1:]
 	}
-	var nonzero []int
-	for _, c := range counts {
-		if c > 0 {
-			nonzero = append(nonzero, c)
-		}
-	}
-	sort.Ints(nonzero)
-	limit := math.MaxInt
-	if len(nonzero) >= 3 {
-		limit = 3 * nonzero[len(nonzero)/2]
-	}
-	for _, c := range counts {
-		if c > limit {
-			dropped = append(dropped, c)
-		} else {
-			samples = append(samples, c)
-		}
-	}
-	return samples, dropped, rows.Err()
+	return counts, thisWeek, nil
 }
 
 const trials = 4000
@@ -591,8 +589,8 @@ const trials = 4000
 //
 // Releases without a fixed date are worked one after another, so a release's
 // finish date also waits for `ahead`: the open stories of the releases before it.
-func forecast(mode string, r *Release, open []*Item, ahead int, samples, dropped []int) (*Forecast, map[string]string) {
-	f := &Forecast{Mode: mode, Samples: samples, Dropped: dropped, Remaining: len(open), Ahead: ahead}
+func forecast(mode string, r *Release, open []*Item, ahead int, samples []int, thisWeek bool) (*Forecast, map[string]string) {
+	f := &Forecast{Mode: mode, Samples: samples, ThisWeek: thisWeek, Remaining: len(open), Ahead: ahead}
 	nonzero := 0
 	for _, s := range samples {
 		if s > 0 {

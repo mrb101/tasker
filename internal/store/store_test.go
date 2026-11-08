@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -334,19 +335,18 @@ func TestReleases(t *testing.T) {
 		open = append(open, must(s.CreateItem("me", "API", ItemInput{Title: fmt.Sprintf("open %d", i), Epic: ep.Ref})).Ref)
 	}
 	for w := 1; w <= 6; w++ {
-		n := 10
-		if w == 3 {
-			n = 200 // a bulk close: not a real week of work
+		for i := 0; i < 10; i++ {
+			finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, true)
 		}
-		for i := 0; i < n; i++ {
-			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
-			closed := weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339)
-			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, closed, it.ID)
+		if w == 3 {
+			for i := 0; i < 200; i++ { // a bulk close: never started, not a real week of work
+				finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, false)
+			}
 		}
 	}
-	samples, dropped, _ := s.weeklyThroughput(pr.ID, 8)
-	if len(dropped) != 1 || dropped[0] != 200 {
-		t.Fatalf("outlier: samples %v dropped %v", samples, dropped)
+	samples, _, _ := s.weeklyThroughput(pr.ID, 8)
+	if fmt.Sprint(samples) != "[10 10 10 10 10 10]" {
+		t.Fatalf("bulk close counted: samples %v", samples)
 	}
 
 	// Plan: 10 committed + 2 stretch; one story waits on something outside the release.
@@ -440,8 +440,7 @@ func TestScopeReleasesQueueUp(t *testing.T) {
 	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
 	for w := 1; w <= 4; w++ { // five stories a week
 		for i := 0; i < 5; i++ {
-			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
-			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339), it.ID)
+			finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, true)
 		}
 	}
 	start := time.Now().UTC().Format(dateLayout)
@@ -477,8 +476,7 @@ func TestForecastWaitsForStartDate(t *testing.T) {
 	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
 	for w := 1; w <= 4; w++ { // five stories a week
 		for i := 0; i < 5; i++ {
-			it := must(s.CreateItem("me", "API", ItemInput{Title: "old"}))
-			s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, weekStart(time.Now()).AddDate(0, 0, -7*w+2).Format(time.RFC3339), it.ID)
+			finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, true)
 		}
 	}
 	start := time.Now().UTC().AddDate(0, 0, 60).Format(dateLayout)
@@ -495,5 +493,45 @@ func TestForecastWaitsForStartDate(t *testing.T) {
 	}
 	if want := time.Now().UTC().AddDate(0, 0, 60+14).Format(dateLayout); f.Date50 != want {
 		t.Fatalf("likely done %s, want %s (start + two weeks)", f.Date50, want)
+	}
+}
+
+// finishOld marks a story done on the Wednesday w weeks ago, started the day
+// before if it was worked on.
+func finishOld(s *Store, it *Item, w int, worked bool) {
+	closed := weekStart(time.Now()).AddDate(0, 0, -7*w+2)
+	s.db.Exec(`UPDATE items SET status='done', closed_at=? WHERE id=?`, closed.Format(time.RFC3339), it.ID)
+	if worked {
+		s.db.Exec(`INSERT INTO activity(project_id, ref, actor, action, detail, created_at) VALUES(?,?,?,?,?,?)`,
+			it.ProjectID, it.Ref, "me", "item.updated", "status=active", closed.AddDate(0, 0, -1).Format(time.RFC3339))
+	}
+}
+
+func TestThroughputCountsThisWeek(t *testing.T) {
+	s := newStore(t)
+	pr := must(s.project(s.db, "API"))
+	for w := 1; w <= 2; w++ {
+		for i := 0; i < 5; i++ {
+			finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, true)
+		}
+	}
+	samples, thisWeek, _ := s.weeklyThroughput(pr.ID, 8)
+	if thisWeek || fmt.Sprint(samples) != "[5 5]" {
+		t.Fatalf("nothing done this week: samples %v this week %v", samples, thisWeek)
+	}
+
+	// Work through the real commands: start, then finish, today.
+	for i := 0; i < 3; i++ {
+		it := must(s.CreateItem("me", "API", ItemInput{Title: "new"}))
+		active, done := "active", "done"
+		must(s.UpdateItem("me", it.Ref, ItemPatch{Status: &active}))
+		must(s.UpdateItem("me", it.Ref, ItemPatch{Status: &done}))
+	}
+	now := time.Now().UTC()
+	days := math.Max(1, now.Sub(weekStart(now)).Hours()/24)
+	want := int(math.Round(3 * 7 / days))
+	samples, thisWeek, _ = s.weeklyThroughput(pr.ID, 8)
+	if !thisWeek || len(samples) != 3 || samples[2] != want {
+		t.Fatalf("this week: samples %v this week %v, want last %d", samples, thisWeek, want)
 	}
 }

@@ -101,9 +101,10 @@ Put stories in a release from the bulk bar (tick stories, choose **Release**, an
 from a story's page, or a whole epic at once from the release page. The release page shows:
 
 - **a forecast** from your measured pace, not estimates. It replays the stories finished per week over the last
-  eight weeks 4,000 times: in date mode it says how many more stories are done by the target (85% sure and
+  eight weeks and this one 4,000 times: in date mode it says how many more stories are done by the target (85% sure and
   even odds) and marks each story *likely*, *maybe* or *at risk*; in scope mode it gives the likely finish date.
-  Weeks far above the rest (bulk closes, imports) are left out, and it says which weeks it used.
+  Only stories that were started before they were finished count, so bulk closes and imports drop out; the
+  current week counts too, scaled up by the days elapsed, so a change of pace shows at once.
 - **risks**: stories waiting on something outside the release, waiting on a decision, or without an approved plan
   when the plan gate is on;
 - a burn-up of the release's scope against done, its scope history, and **release notes** grouped by epic.
