@@ -615,25 +615,27 @@ func forecast(mode string, r *Release, open []*Item, ahead int, samples []int, t
 	startDays := int(math.Ceil(from.Sub(today).Hours() / 24))
 
 	if mode == "scope" || r.TargetOn == "" {
+		// workDays is how long n stories take at this trial's weekly pace, in days:
+		// whole weeks, then the part of the last week the rest needs.
+		workDays := func(n int) float64 {
+			days := 0.0
+			for w := 0; n > 0 && w < 520; w++ {
+				d := draw()
+				if d >= n {
+					return days + 7*float64(n)/float64(d)
+				}
+				n -= d
+				days += 7
+			}
+			return days
+		}
 		days := make([]int, trials)
 		for i := range days {
 			// First the stories of the releases ahead, then this release's own,
 			// from whichever comes later: the work ahead done, or the start date.
-			done, w := 0, 0
-			for done < ahead && w < 520 {
-				done += draw()
-				w++
-			}
-			begin, own := 7*w, done-ahead // a week's spare throughput carries over...
-			if begin < startDays {
-				begin, own = startDays, 0 // ...unless the release has not started yet
-			}
-			w = 0
-			for own < len(open) && w < 520 {
-				own += draw()
-				w++
-			}
-			days[i] = begin + 7*w
+			begin := math.Max(workDays(ahead), float64(startDays))
+			// Done by the end of the day the work runs into: 0.4 days is today.
+			days[i] = max(0, int(math.Ceil(begin+workDays(len(open))))-1)
 		}
 		sort.Ints(days)
 		f.Date50 = today.AddDate(0, 0, pick(days, .5)).Format(dateLayout)
@@ -885,6 +887,35 @@ func (r *Release) DaysLeft() int {
 	}
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	return int(t.Sub(today).Hours() / 24)
+}
+
+// Slip is how many days after its target a release is likely done, at even
+// odds: negative when it is likely done early. ok is false without a target or
+// a finish date to compare.
+func (r *Release) Slip() (days int, ok bool) {
+	if r.Forecast == nil || r.Forecast.Date50 == "" {
+		return 0, false
+	}
+	target, err1 := time.Parse(dateLayout, r.TargetOn)
+	done, err2 := time.Parse(dateLayout, r.Forecast.Date50)
+	if err1 != nil || err2 != nil {
+		return 0, false
+	}
+	return int(done.Sub(target).Hours() / 24), true
+}
+
+// Pace compares how much of a release is done with how much of its time, start
+// to target, is used. ok is false without both dates.
+func (r *Release) Pace() (donePct, timePct int, ok bool) {
+	start, err1 := time.Parse(dateLayout, r.StartsOn)
+	target, err2 := time.Parse(dateLayout, r.TargetOn)
+	if err1 != nil || err2 != nil || r.Total == 0 || !target.After(start) {
+		return 0, 0, false
+	}
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	span := target.AddDate(0, 0, 1).Sub(start).Hours() // the target day counts
+	used := math.Min(math.Max(today.Sub(start).Hours(), 0), span)
+	return 100 * r.Done / r.Total, int(math.Round(100 * used / span)), true
 }
 
 // openAhead counts the open stories of the releases worked before r: the one in

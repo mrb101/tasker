@@ -491,8 +491,8 @@ func TestForecastWaitsForStartDate(t *testing.T) {
 	if f.Date50 <= start {
 		t.Fatalf("likely done %s, before the release starts %s", f.Date50, start)
 	}
-	if want := time.Now().UTC().AddDate(0, 0, 60+14).Format(dateLayout); f.Date50 != want {
-		t.Fatalf("likely done %s, want %s (start + two weeks)", f.Date50, want)
+	if want := time.Now().UTC().AddDate(0, 0, 60+13).Format(dateLayout); f.Date50 != want {
+		t.Fatalf("likely done %s, want %s (the last of two weeks from the start)", f.Date50, want)
 	}
 }
 
@@ -533,5 +533,35 @@ func TestThroughputCountsThisWeek(t *testing.T) {
 	samples, thisWeek, _ = s.weeklyThroughput(pr.ID, 8)
 	if !thisWeek || len(samples) != 3 || samples[2] != want {
 		t.Fatalf("this week: samples %v this week %v, want last %d", samples, thisWeek, want)
+	}
+}
+
+// A release due in a few days whose pace finishes it in time is on track: the
+// forecast counts days, not whole weeks.
+func TestForecastCountsDays(t *testing.T) {
+	s := newStore(t)
+	scope := "scope"
+	must(s.UpdateProject("me", "API", ProjectPatch{ReleaseMode: &scope}))
+	for w := 1; w <= 4; w++ { // fourteen stories a week: two a day
+		for i := 0; i < 14; i++ {
+			finishOld(s, must(s.CreateItem("me", "API", ItemInput{Title: "old"})), w, true)
+		}
+	}
+	today := time.Now().UTC()
+	r := must(s.CreateRelease("me", "API", ReleaseInput{StartsOn: today.AddDate(0, 0, -5).Format(dateLayout), TargetOn: today.AddDate(0, 0, 3).Format(dateLayout)}))
+	ref := r.Ref
+	var refs []string
+	for j := 0; j < 6; j++ { // three days of work
+		refs = append(refs, must(s.CreateItem("me", "API", ItemInput{Title: "t"})).Ref)
+	}
+	must(s.BulkUpdate("me", "API", refs, ItemPatch{Release: &ref}))
+	active := "active"
+	must(s.UpdateRelease("me", ref, ReleasePatch{Status: &active}))
+	got := must(s.GetRelease(ref))
+	if want := today.AddDate(0, 0, 2).Format(dateLayout); got.Forecast.Date50 != want {
+		t.Fatalf("likely done %s, want %s (%+v)", got.Forecast.Date50, want, got.Forecast)
+	}
+	if v, why := got.Health(scope); v != VerdictOnTrack {
+		t.Fatalf("verdict %q (%s), want on track", v, why)
 	}
 }

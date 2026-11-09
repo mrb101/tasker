@@ -281,3 +281,26 @@ func TestReleaseTimeline(t *testing.T) {
 		t.Fatal("empty timeline should render nothing")
 	}
 }
+
+func TestVerdictPill(t *testing.T) {
+	day := func(n int) string { return time.Now().UTC().AddDate(0, 0, n).Format("2006-01-02") }
+	rel := func(target, likely string) *store.Release {
+		return &store.Release{TargetOn: target, Forecast: &store.Forecast{Date50: likely}}
+	}
+	for _, c := range []struct {
+		r       *store.Release
+		verdict string
+		want    string
+	}{
+		{rel(day(3), day(7)), store.VerdictOffTrack, "✕ likely 4 days late"},
+		{rel(day(3), day(4)), store.VerdictOffTrack, "✕ likely 1 day late"},
+		{rel(day(3), day(1)), store.VerdictOnTrack, "✓ on track · 2 days to spare"},
+		{rel(day(3), day(3)), store.VerdictOnTrack, "✓ on track"},
+		{rel(day(3), day(3)), store.VerdictAtRisk, "! at risk · tight"},
+		{rel("", day(3)), store.VerdictOffTrack, "✕ off track"}, // date mode: no finish date to compare
+	} {
+		if got, _ := verdictPill(c.r, c.verdict); got != c.want {
+			t.Errorf("%s target %s likely %s: got %q, want %q", c.verdict, c.r.TargetOn, c.r.Forecast.Date50, got, c.want)
+		}
+	}
+}

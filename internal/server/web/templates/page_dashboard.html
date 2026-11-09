@@ -50,11 +50,12 @@
       <div class="rel-main">
         <div class="row">
           <a class="ref" href="/rel/{{.Ref}}">{{.Ref}}</a><a href="/rel/{{.Ref}}"><b class="rel-name">{{.Name}}</b></a>
-          <span class="status s-active">in progress</span>
-          {{if $v.RelVerdict}}<span class="verdict v-{{if eq $v.RelVerdict "on track"}}ok{{else if eq $v.RelVerdict "at risk"}}warn{{else}}bad{{end}}">{{if eq $v.RelVerdict "on track"}}✓{{else if eq $v.RelVerdict "at risk"}}!{{else}}✕{{end}} {{$v.RelVerdict}}</span>{{end}}
+          <span class="muted small">in progress</span>
+          {{if $v.RelPill}}<span class="verdict {{$v.RelPillClass}}" title="{{$v.RelVerdict}}: {{$v.RelReason}}">{{$v.RelPill}}</span>{{end}}
         </div>
         {{if .Goal}}<p class="relgoal">{{.Goal}}</p>{{end}}
-        {{if $v.RelReason}}<p class="small">{{$v.RelReason}}.</p>{{end}}
+        {{if $v.RelPace}}<p class="small">{{$v.RelPace}}.</p>{{end}}
+        {{if $v.RelReason}}<p class="small muted">Forecast: {{$v.RelReason}}.</p>{{end}}
         <span class="progress wide" title="{{.Done}} of {{.Total}} done"><i style="width:{{pct .Done .Total}}%"></i></span>
       </div>
       <div class="rel-facts">

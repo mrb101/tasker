@@ -87,6 +87,8 @@ func addReleases(st *store.Store, p *store.Project, view map[string]any) error {
 			onTimeline = append(onTimeline, full)
 			verdict, reason := full.Health(p.ReleaseMode)
 			view["Rel"], view["RelVerdict"], view["RelReason"], view["RelDaysLeft"] = full, verdict, reason, full.DaysLeft()
+			view["RelPill"], view["RelPillClass"] = verdictPill(full, verdict)
+			view["RelPace"] = paceLine(full)
 		case "planned":
 			upcoming = append(upcoming, r)
 			full, err := st.GetRelease(r.Ref) // its forecast places it on the timeline
@@ -108,4 +110,48 @@ func addReleases(st *store.Store, p *store.Project, view map[string]any) error {
 	view["Timeline"] = releaseTimeline(onTimeline, time.Now())
 	view["HasReleases"] = len(list) > 0
 	return nil
+}
+
+// verdictPill says the verdict and, when the forecast gives a finish date, by
+// how much: "likely 3 days late" says more than "off track".
+func verdictPill(r *store.Release, verdict string) (label, class string) {
+	days := func(n int) string {
+		if n == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", n)
+	}
+	slip, dated := r.Slip()
+	switch verdict {
+	case store.VerdictOnTrack:
+		if dated && slip < 0 {
+			return "✓ on track · " + days(-slip) + " to spare", "v-ok"
+		}
+		return "✓ on track", "v-ok"
+	case store.VerdictAtRisk:
+		return "! at risk · tight", "v-warn"
+	case store.VerdictOffTrack:
+		if dated && slip > 0 {
+			return "✕ likely " + days(slip) + " late", "v-bad"
+		}
+		return "✕ off track", "v-bad"
+	}
+	return "", ""
+}
+
+// paceLine compares what is done with the time used, start to target: how far
+// along the release is so far, which the forecast (what is still to come) is not.
+func paceLine(r *store.Release) string {
+	done, used, ok := r.Pace()
+	if !ok || r.Status != "active" {
+		return ""
+	}
+	pace := "on a steady pace"
+	switch {
+	case done >= used+5:
+		pace = "ahead of a steady pace"
+	case done <= used-5:
+		pace = "behind a steady pace"
+	}
+	return fmt.Sprintf("%d%% done with %d%% of the time used: %s", done, used, pace)
 }
