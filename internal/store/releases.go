@@ -544,12 +544,14 @@ func (s *Store) weeklyThroughput(projectID int64, n int) (samples []int, thisWee
 	week := weekStart(now)
 	from := week.AddDate(0, 0, -7*n)
 	counts := make([]int, n+1) // the last one is this week
+	// One pass over the project's activity for when each story was first
+	// started; a correlated lookup per story scanned the whole log each time.
 	rows, err := s.db.Query(`SELECT i.closed_at FROM items i JOIN projects p ON p.id = i.project_id
-		WHERE i.project_id = ? AND i.status = 'done' AND i.closed_at >= ?
-		AND EXISTS (SELECT 1 FROM activity a WHERE a.project_id = i.project_id AND a.ref = p.key || '-' || i.number
-			AND a.created_at <= i.closed_at
-			AND (a.action = 'item.started' OR (a.action = 'item.updated' AND (a.detail LIKE '%status=active%' OR a.detail LIKE '%status=review%'))))`,
-		projectID, from.Format(time.RFC3339))
+		JOIN (SELECT a.ref, MIN(a.created_at) AS started FROM activity a WHERE a.project_id = ?
+			AND (a.action = 'item.started' OR (a.action = 'item.updated' AND (a.detail LIKE '%status=active%' OR a.detail LIKE '%status=review%')))
+			GROUP BY a.ref) s ON s.ref = p.key || '-' || i.number
+		WHERE i.project_id = ? AND i.status = 'done' AND i.closed_at >= ? AND s.started <= i.closed_at`,
+		projectID, projectID, from.Format(time.RFC3339))
 	if err != nil {
 		return nil, false, err
 	}

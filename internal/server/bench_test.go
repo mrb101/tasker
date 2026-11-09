@@ -3,6 +3,7 @@ package server
 import (
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/mrb101/tasker/internal/store"
@@ -19,7 +20,11 @@ func BenchmarkPages(b *testing.B) {
 	}
 	srv, _ := New(st, "bench")
 	h := srv.Handler()
-	for _, p := range []string{"/p/BIG", "/p/BIG/items"} {
+	paths := []string{"/p/BIG", "/p/BIG/items"}
+	if env := os.Getenv("BENCH_PATHS"); env != "" {
+		paths = strings.Split(env, ",")
+	}
+	for _, p := range paths {
 		b.Run(p, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				w := httptest.NewRecorder()
