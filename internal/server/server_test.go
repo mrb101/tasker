@@ -304,3 +304,45 @@ func TestVerdictPill(t *testing.T) {
 		}
 	}
 }
+
+// The board renders the columns this browser minimized (cookie per project) as
+// folded, and only those.
+func TestBoardFoldedColumns(t *testing.T) {
+	ts := setup(t)
+	req(t, ts, "POST", "/api/projects", map[string]string{"key": "api", "name": "Api"})
+	req(t, ts, "POST", "/api/projects/API/queues", map[string]any{"name": "lane"})
+	req(t, ts, "POST", "/api/projects/API/queues", map[string]any{"name": "other"})
+
+	page := func(cookie string) string {
+		t.Helper()
+		r, _ := http.NewRequest("GET", ts.URL+"/p/API", nil)
+		if cookie != "" {
+			r.Header.Set("Cookie", cookie)
+		}
+		res, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return string(b)
+	}
+	folded := regexp.MustCompile(`class="[^"]*\bfolded\b[^"]*"[^>]*data-fold-key="([^"]+)"`)
+	keys := func(html string) []string {
+		var out []string
+		for _, m := range folded.FindAllStringSubmatch(html, -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+
+	if got := keys(page("")); len(got) != 0 {
+		t.Fatalf("no cookie: folded %v", got)
+	}
+	if got := keys(page("tasker_folded_API=_triage%2Clane")); strings.Join(got, ",") != "_triage,lane" {
+		t.Fatalf("folded %v, want triage and lane", got)
+	}
+	if got := keys(page("tasker_folded_OTHER=lane")); len(got) != 0 {
+		t.Fatalf("another project's cookie folded %v", got)
+	}
+}

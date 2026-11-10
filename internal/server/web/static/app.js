@@ -507,7 +507,36 @@
   document.addEventListener('input', (e) => { if (e.target.closest('#boardfilter')) applyFilter(); });
   document.addEventListener('change', (e) => { if (e.target.closest('#boardfilter')) applyFilter(); });
 
+  // ---- minimized board columns ----
+  // The list lives in a cookie per project so the server renders the board with
+  // the same columns minimized (no flash on load, kept across live refreshes).
+  const foldCookie = () => 'tasker_folded_' + project();
+  function foldedSet() {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + foldCookie() + '=([^;]*)'));
+    return new Set(m ? decodeURIComponent(m[1]).split(',').filter(Boolean) : []);
+  }
+  function saveFolded(set) {
+    document.cookie = `${foldCookie()}=${encodeURIComponent([...set].join(','))}; path=/; max-age=31536000; samesite=lax`;
+  }
+  function setFolded(col, fold) {
+    const set = foldedSet();
+    if (fold) set.add(col.dataset.foldKey); else set.delete(col.dataset.foldKey);
+    saveFolded(set);
+    col.classList.toggle('folded', fold);
+    const target = $(fold ? '.fold-strip' : '.colfold', col);
+    if (target) target.focus({ preventScroll: true });
+    if (!fold) col.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#board [data-fold-toggle]');
+    if (!btn) return;
+    const col = btn.closest('[data-fold-key]');
+    setFolded(col, !col.classList.contains('folded'));
+  });
+
   // ---- drag & drop triage ----
+  // Drop zones are the card lists, and the strips of minimized columns (the
+  // story goes to the bottom of that queue, or back to triage).
   let dragging = null, dragFrom = null, dropped = false;
   document.addEventListener('dragstart', (e) => {
     const card = e.target.closest && e.target.closest('.card[draggable]');
@@ -522,16 +551,18 @@
   document.addEventListener('dragend', () => {
     if (!dragging) return;
     dragging.classList.remove('dragging');
-    $$('.cards.over').forEach((c) => c.classList.remove('over'));
+    $$('.over').forEach((c) => c.classList.remove('over'));
     if (!dropped) refresh();
     dragging = null;
   });
+  const dropZone = (e) => e.target.closest && e.target.closest('.cards.drop, .folded > .fold-strip');
   document.addEventListener('dragover', (e) => {
-    const zone = e.target.closest && e.target.closest('.cards.drop');
+    const zone = dropZone(e);
     if (!zone || !dragging) return;
     e.preventDefault();
-    $$('.cards.over').forEach((c) => c !== zone && c.classList.remove('over'));
+    $$('.over').forEach((c) => c !== zone && c.classList.remove('over'));
     zone.classList.add('over');
+    if (zone.classList.contains('fold-strip')) return; // nothing to place the card among
     if (zone.dataset.queue === '') { if (dragging.parentElement !== zone) zone.prepend(dragging); return; }
     const after = [...zone.querySelectorAll(':scope > .card:not(.dragging)')].find((c) => {
       const r = c.getBoundingClientRect();
@@ -540,16 +571,19 @@
     if (after) zone.insertBefore(dragging, after); else zone.appendChild(dragging);
   });
   document.addEventListener('drop', async (e) => {
-    const zone = e.target.closest && e.target.closest('.cards.drop');
+    const zone = dropZone(e);
     if (!zone || !dragging) return;
     e.preventDefault();
     dropped = true;
     const card = dragging;
     const ref = card.dataset.ref;
     const queue = zone.dataset.queue;
+    const strip = zone.classList.contains('fold-strip');
     try {
       if (queue === '') {
-        if (dragFrom !== zone) await api('DELETE /api/queued/' + ref);
+        if (dragFrom.dataset.queue !== '') await api('DELETE /api/queued/' + ref);
+      } else if (strip) {
+        await api(`POST /api/queues/${project()}/${queue}/items`, { refs: [ref], position: { where: 'bottom' } });
       } else {
         const next = card.nextElementSibling && card.nextElementSibling.classList.contains('card') ? card.nextElementSibling : null;
         const prev = card.previousElementSibling && card.previousElementSibling.classList.contains('card') ? card.previousElementSibling : null;

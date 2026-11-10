@@ -383,9 +383,10 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 			s.webErr(w, r, err)
 			return
 		}
+		folded := foldedColumns(r, p.Key)
 		var full []boardQueue
 		for _, q := range queues {
-			full = append(full, boardQueue{Queue: q, More: q.OpenCount - len(q.Items)})
+			full = append(full, boardQueue{Queue: q, More: q.OpenCount - len(q.Items), Folded: folded[q.Name]})
 		}
 		// Triage is sorted and filtered on the server, so the cards shown are the right ones.
 		qv := r.URL.Query()
@@ -402,6 +403,7 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		s.render(w, r, "board", &Page{Title: p.Key + " board", Tab: "board", Project: p, D: map[string]any{
 			"Queues": full, "Inbox": inbox, "InboxMatching": matching, "InboxMore": matching - len(inbox), "Loose": loose, "Epics": epics,
 			"TF": tf, "TFiltered": tf.Epic != "" || tf.Label != "" || tf.Blocked != "",
+			"TriageFolded": folded[triageFoldKey],
 		}})
 	})
 
@@ -679,7 +681,33 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 // boardQueue is a queue column on the board; More counts cards not shown.
 type boardQueue struct {
 	*store.Queue
-	More int
+	More   int
+	Folded bool // minimized to a narrow strip on the board
+}
+
+// triageFoldKey names the triage column among the minimized ones; queue names
+// cannot start with "_", so it never clashes with a queue.
+const triageFoldKey = "_triage"
+
+// foldedColumns reads which board columns this browser has minimized. The page
+// script keeps the list in a cookie per project (comma-separated column names)
+// so the board renders them minimized, with no flash on load or live refresh.
+func foldedColumns(r *http.Request, projectKey string) map[string]bool {
+	c, err := r.Cookie("tasker_folded_" + projectKey)
+	if err != nil {
+		return nil
+	}
+	v, err := url.QueryUnescape(c.Value)
+	if err != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, name := range strings.Split(v, ",") {
+		if name != "" {
+			out[name] = true
+		}
+	}
+	return out
 }
 
 // mermaidGraph renders an epic's dependency graph as mermaid source ("" if no edges).

@@ -251,6 +251,28 @@ a.ref:hover { color: var(--accent); }
 .col.hint { background: none; border: none; flex-basis: 360px; }
 .col.q-paused { opacity: .7; }
 .col-head { padding: 4px 4px 6px; }
+
+/* Minimized columns: a narrow strip with the count and name. The strip expands
+   the column and takes drops (a story dropped on it goes to the bottom). */
+/* Column title row: name takes the room, then the count, then the minimize
+   button in the top-right corner, the same on triage and on every queue. */
+.col-head > .row:first-child, .triage-head > .row:first-child { flex-wrap: nowrap; gap: 6px; min-height: 24px; }
+.col-head > .row:first-child > .qname, .triage-head > .row:first-child > b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colfold { flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px; margin: -2px -4px 0 0; padding: 0;
+  background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.colfold:hover, .colfold:focus-visible { color: var(--accent); border-color: var(--line); background: var(--panel); }
+.fold-strip { display: none; }
+.board .folded { flex: 0 0 44px; min-width: 0; padding: 4px; overflow: hidden; align-self: stretch; }
+.board .folded > :not(.fold-strip) { display: none; }
+.board .folded > .fold-strip { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; height: 100%; min-height: 180px;
+  padding: 6px 0; background: none; border: none; border-radius: 7px; color: inherit; font: inherit; cursor: pointer; }
+.fold-strip:hover, .fold-strip:focus-visible { background: var(--panel); }
+.fold-strip:hover .fold-arrow { color: var(--accent); }
+.fold-strip.over { background: var(--accent-soft); outline: 2px dashed var(--accent); outline-offset: -2px; }
+.fold-arrow { font-size: 15px; line-height: 1; color: var(--muted); }
+.fold-paused { font-size: 9px; color: var(--warn); }
+.fold-name { writing-mode: vertical-rl; font-family: var(--mono); font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: calc(100vh - 220px); }
+.triage .fold-name { font-family: inherit; font-size: 13px; }
 .qname { font-weight: 700; font-family: var(--mono); font-size: 13px; }
 .qmeta { font-size: 11.5px; color: var(--muted); display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
 .qmeta code { font-size: 11px; }
@@ -597,6 +619,7 @@ tr.isdone td { opacity: .6; }
   .board { padding: 0 12px 24px; gap: 10px; scroll-snap-type: x mandatory; scroll-padding: 0 12px; min-height: 0; overscroll-behavior-x: contain; }
   .col, .triage { flex: 0 0 calc(100% - 24px); min-width: 0; max-height: none; overflow: visible; scroll-snap-align: start; }
   .col.hint { flex-basis: calc(100% - 24px); }
+  .board .folded { align-self: flex-start; } /* columns run the page's length here: keep the strip short */
   .col select, .triage select { min-width: 0; max-width: 100%; }
   .queues-label { display: none; }
   .triage-filter select[name=tepic] { max-width: none; flex: 1 1 120px; }

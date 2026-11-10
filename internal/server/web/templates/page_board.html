@@ -28,10 +28,14 @@
 </form>
 
 <div class="board" id="board">
-  <section class="triage" aria-label="Triage">
+  <section class="triage{{if .D.TriageFolded}} folded{{end}}" aria-label="Triage" data-fold-key="_triage">
+    <button type="button" class="fold-strip" data-fold-toggle data-queue="" aria-expanded="false" title="Expand triage">
+      <span class="fold-arrow" aria-hidden="true">›</span><span class="count">{{$p.Counts.Inbox}}</span><span class="fold-name">Triage</span>
+    </button>
     <header class="triage-head">
       <div class="row"><span class="triage-icon">⇢</span><b class="grow">Triage</b>
-        <span class="count" title="{{if .D.TFiltered}}matching the filter, of {{$p.Counts.Inbox}}{{else}}in triage{{end}}">{{if .D.TFiltered}}{{.D.InboxMatching}} of {{end}}{{$p.Counts.Inbox}}</span></div>
+        <span class="count" title="{{if .D.TFiltered}}matching the filter, of {{$p.Counts.Inbox}}{{else}}in triage{{end}}">{{if .D.TFiltered}}{{.D.InboxMatching}} of {{end}}{{$p.Counts.Inbox}}</span>
+        <button type="button" class="colfold" data-fold-toggle aria-expanded="true" title="Minimize triage">‹</button></div>
       <p class="triage-hint">Not in any queue yet. Drag a story onto a queue, or tick several and use the bar below.</p>
       <form class="triage-filter" method="get" data-autoget>
         {{with .D.TF}}
@@ -77,12 +81,18 @@
   <div class="queues-label"><span>Queues</span></div>
 
   {{range .D.Queues}}
-  <section class="col queue q-{{.Status}}" data-queue-col="{{.Name}}">
+  <section class="col queue q-{{.Status}}{{if .Folded}} folded{{end}}" data-queue-col="{{.Name}}" data-fold-key="{{.Name}}">
+    <button type="button" class="fold-strip" data-fold-toggle data-queue="{{.Name}}" aria-expanded="false" title="Expand {{.Name}}">
+      <span class="fold-arrow" aria-hidden="true">›</span><span class="count">{{.OpenCount}}</span>
+      {{if eq .Status "paused"}}<span class="fold-paused" title="paused">❚❚</span>{{end}}
+      <span class="fold-name">{{.Name}}</span>
+    </button>
     <header class="col-head">
       <div class="row">
         <a class="qname grow" href="/q/{{.Project}}/{{.Name}}">{{.Name}}</a>
         {{if eq .Status "paused"}}<span class="chip warn">paused</span>{{end}}
         <span class="count">{{.OpenCount}}</span>
+        <button type="button" class="colfold" data-fold-toggle aria-expanded="true" title="Minimize {{.Name}}">‹</button>
       </div>
       <div class="row sel-row"><button type="button" class="linkbtn" data-selall>Select shown</button></div>
       <div class="qmeta">
