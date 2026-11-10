@@ -147,6 +147,20 @@ Other devices then use `http://<tailscale-ip-or-name>:7777`, and their CLI uses 
 in `TASKER_URL`. **tasker has no login**: everyone who can reach that address can read and change
 everything, so only do this on a network you trust.
 
+### Behind a shared Traefik
+
+If one Traefik on this machine owns port 80 and routes names to projects over an external `proxy`
+network (only containers labelled `edge-proxy.enable=true`), tasker can join it under a name of its
+own. Add to `.env` and restart:
+
+```sh
+COMPOSE_FILE=docker-compose.yml:compose.edge-proxy.yaml
+TASKER_HOST=tasker.example.lan
+```
+
+Port 7777 stays bound for the CLI and MCP. Set `TASKER_PUBLIC_URL=http://tasker.example.lan` too if
+notifications should open that address.
+
 ## Data and backups
 
 One SQLite file (`TASKER_DB`, `/data/tasker.db` in Docker). Export documents as markdown with

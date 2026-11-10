@@ -1,0 +1,25 @@
+# Serve tasker through a shared Traefik (such as an "edge-proxy" project that
+# owns port 80 and routes names to the projects on this machine), at a name of
+# its own instead of host:7777. The 7777 binding stays, for the CLI and MCP.
+#
+# Turn it on in .env:
+#   COMPOSE_FILE=docker-compose.yml:compose.edge-proxy.yaml
+#   TASKER_HOST=tasker.example.lan
+#
+# The proxy's Traefik must watch the external `proxy` network and pick up
+# containers labelled edge-proxy.enable=true. tasker has no login: everyone who
+# can reach that Traefik can read and change everything.
+
+services:
+  tasker:
+    networks: [default, proxy]
+    labels:
+      traefik.enable: "true"
+      edge-proxy.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.tasker.rule: Host(`${TASKER_HOST:?set TASKER_HOST in .env}`)
+      traefik.http.services.tasker.loadbalancer.server.port: "7777"
+
+networks:
+  proxy:
+    external: true
