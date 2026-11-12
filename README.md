@@ -103,9 +103,11 @@ Tools mirror the CLI (`tasker_next`, `tasker_start`, `tasker_create_items`, `tas
   Triage sorts (priority, newest, oldest, by epic) and filters (epic, label, blocked) on the server.
 - **Items / Epics / Docs** lists, detail pages with inline editing, dependencies, comments, activity.
 - **Reviews**: every document waiting for you across projects, plus items waiting to merge.
-- **Live** (`/live`): everything in progress or in review across projects as cards (who, for how long, files
-  changing, overlaps), and a feed of the last 24 hours (started, finished, plans submitted and approved,
-  overlaps), updating as it happens. Filter to one project; **wall mode** (`/live?wall=1`) is for a screen left
+- **Live** (`/live`): documents waiting for your review first, then everything in progress or in review across
+  projects as cards (who, for how long, files changing, overlaps), and a feed of the last 24 hours (started,
+  finished, plans submitted and approved, overlaps), updating as it happens. Click a card or a feed entry to read
+  it in a dialog without leaving the page; documents waiting for review can be approved, or sent back with a
+  comment, right there. Filter to one project; **wall mode** (`/live?wall=1`) is for a screen left
   open: big type, no sidebar, and it keeps the screen awake. The page is a fixed-size snapshot (at most 40 events)
   that each update replaces, and in wall mode it starts afresh every six hours, so it does not grow.
 - Document page: approve / request changes, revision history, diff between revisions.

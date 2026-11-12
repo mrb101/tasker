@@ -653,6 +653,28 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		buf.WriteTo(w)
 	})
 
+	// Quick view of a document, with approve / request changes, for the live page.
+	mux.HandleFunc("GET /d/{ref}/peek", func(w http.ResponseWriter, r *http.Request) {
+		d, err := st.GetDoc(r.PathValue("ref"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		projects, _ := st.ListProjects()
+		keys := make([]string, 0, len(projects))
+		for _, p := range projects {
+			keys = append(keys, p.Key)
+		}
+		render.SetProjectKeys(keys) // so SKEMA-12 in the text becomes a link
+		var buf bytes.Buffer
+		if err := s.frags.ExecuteTemplate(&buf, "docpeek", map[string]any{"Doc": d}); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		buf.WriteTo(w)
+	})
+
 	mux.HandleFunc("GET /e/{ref}", func(w http.ResponseWriter, r *http.Request) {
 		e, err := st.GetEpic(r.PathValue("ref"))
 		if err != nil {

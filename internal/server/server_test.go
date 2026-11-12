@@ -193,7 +193,7 @@ func TestAPIFlowAndPages(t *testing.T) {
 	for _, p := range []string{"/", "/reviews", "/search?q=one", "/p/API", "/p/API/items", "/p/API/epics", "/p/API/docs",
 		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/p/API/releases", "/rel/API-R1", "/r/API-R1", "/e/API-E1",
 		"/d/API-D1", "/d/API-D1?view=diff", "/d/API-D1?view=edit", "/d/API-D1?view=raw", "/d/API-D1?rev=1",
-		"/live", "/live?project=API", "/live?wall=1"} {
+		"/live", "/live?project=API", "/live?wall=1", "/d/API-D1/peek"} {
 		res, err := http.Get(ts.URL + p)
 		if err != nil {
 			t.Fatal(err)
@@ -202,6 +202,12 @@ func TestAPIFlowAndPages(t *testing.T) {
 		res.Body.Close()
 		if res.StatusCode != 200 {
 			t.Fatalf("%s: %d\n%s", p, res.StatusCode, body)
+		}
+		if p == "/d/API-D1/peek" && !strings.Contains(string(body), `data-api="POST /api/docs/API-D1/actions/approve" data-then="close-peek"`) {
+			t.Fatalf("the document quick view has no approve button:\n%s", body)
+		}
+		if p == "/live" && !strings.Contains(string(body), `class="reviewcard" href="/d/API-D1" data-ref="API-D1"`) {
+			t.Fatal("the live page does not list the document waiting for review")
 		}
 		if p == "/live?wall=1" && (!strings.Contains(string(body), `class="wall" data-wall data-live`) || !strings.Contains(string(body), `href="/i/API-1" data-ref="API-1"`)) {
 			t.Fatal("wall mode does not show the work in progress")

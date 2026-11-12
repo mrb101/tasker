@@ -136,7 +136,11 @@ func (s *Store) CreateDoc(actor, projectKey string, in DocInput) (*Doc, error) {
 			}
 		}
 		if in.Submit {
-			return s.addCommentTx(t, pr.ID, pr.Key, KindDoc, id, ref, "submit", 1, "")
+			if err := s.addCommentTx(t, pr.ID, pr.Key, KindDoc, id, ref, "submit", 1, ""); err != nil {
+				return err
+			}
+			// Logged like the Submit action, so "submitted for review" shows wherever activity is read.
+			return t.log(pr.ID, pr.Key, ref, "doc.submit", "revision 1")
 		}
 		return nil
 	})

@@ -10,7 +10,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
 
 - A Live page (`/live`): work in progress and in review across projects as cards, and a feed of the last 24
   hours, updating as it happens. Wall mode (`?wall=1`) is for a screen left open: big type, no sidebar, the
-  screen kept awake. It holds a bounded snapshot, so a page left open for days does not grow.
+  screen kept awake. It holds a bounded snapshot, so a page left open for days does not grow. Documents waiting
+  for review come first; stories and documents open in a dialog, where a document can be approved or sent back
+  with a comment without leaving the page.
+
+### Fixed
+
+- A document created already submitted for review (`tasker doc create --submit`) is now logged as submitted,
+  like one submitted later.
 - Stories remember what they changed. `tasker finish`, run in the story's worktree, reads git and records the
   files (lines added and removed, renames) and commits of the branch since it left its base — the queue's base
   branch, or the story ahead of it in a stacked queue. The story page lists them, cards and the quick view show

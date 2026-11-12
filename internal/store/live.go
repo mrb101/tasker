@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -36,6 +37,7 @@ type LiveEvent struct {
 
 type LiveView struct {
 	Project string       `json:"project,omitempty"`
+	Reviews []*Doc       `json:"reviews"` // documents waiting for a person to approve or send back
 	Now     []*LiveCard  `json:"now"`
 	Feed    []*LiveEvent `json:"feed"`
 	Done    int          `json:"done"`    // finished in the last day
@@ -70,6 +72,10 @@ func eventKind(a Activity) string {
 		return "overlap"
 	case "doc.submit":
 		return "plan"
+	case "doc.updated":
+		if strings.Contains(a.Detail, "status=in_review") { // a new revision sent back for review
+			return "plan"
+		}
 	case "doc.approve":
 		return "approved"
 	case "doc.request_changes":
@@ -109,6 +115,11 @@ func (s *Store) Live(project string) (*LiveView, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Waiting for you: what agents submitted for review, longest waiting first.
+	if v.Reviews, err = s.ListDocs(DocFilter{Project: project, Status: "in_review"}); err != nil {
+		return nil, err
+	}
+	sort.SliceStable(v.Reviews, func(i, j int) bool { return v.Reviews[i].UpdatedAt < v.Reviews[j].UpdatedAt })
 	// When each started (or went to review), and what its branch is changing now.
 	overlaps := map[int64][]Overlap{}
 	seenProject := map[int64]bool{}
@@ -145,7 +156,8 @@ func (s *Store) Live(project string) (*LiveView, error) {
 	// The feed: the last day's meaningful events, newest first.
 	q := `SELECT a.id, p.key, a.ref, a.actor, a.action, a.detail, a.created_at FROM activity a JOIN projects p ON p.id = a.project_id
 		WHERE a.created_at >= ? AND (a.action IN ('item.started','item.finished','item.overlap','doc.submit','doc.approve','doc.request_changes','release.shipped')
-			OR (a.action = 'item.updated' AND a.detail LIKE '%status=%'))`
+			OR (a.action = 'item.updated' AND a.detail LIKE '%status=%')
+			OR (a.action = 'doc.updated' AND a.detail LIKE '%status=in_review%'))`
 	fargs := []any{nowT.Add(-liveWindow).Format(time.RFC3339)}
 	if projectID != 0 {
 		q += ` AND a.project_id = ?`

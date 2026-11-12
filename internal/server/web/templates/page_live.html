@@ -5,7 +5,7 @@
     <span class="live-dot" title="This page updates as things happen">live</span>
     <span class="muted small">updated <time data-local="time" datetime="{{$v.At}}">{{date $v.At}}</time></span>
     <span class="grow"></span>
-    <span class="live-stats"><b>{{len $v.Now}}</b> in progress · <b>{{$v.Started}}</b> started · <b>{{$v.Done}}</b> done <span class="muted">in the last 24h</span></span>
+    <span class="live-stats">{{if $v.Reviews}}<b class="waiting">{{len $v.Reviews}} waiting for you</b> · {{end}}<b>{{len $v.Now}}</b> in progress · <b>{{$v.Started}}</b> started · <b>{{$v.Done}}</b> done <span class="muted">in the last 24h</span></span>
     <form class="live-filter" method="get" action="/live">
       {{if $wall}}<input type="hidden" name="wall" value="1">{{end}}
       <select name="project" aria-label="Project" data-submit>
@@ -16,6 +16,21 @@
     {{if $wall}}<a class="btn small" href="/live{{with $v.Project}}?project={{.}}{{end}}">Exit wall mode</a>
     {{else}}<a class="btn small" href="/live?wall=1{{with $v.Project}}&amp;project={{.}}{{end}}" title="Big type, no sidebar, keeps the screen awake">Wall mode</a>{{end}}
   </div>
+
+  {{if $v.Reviews}}
+  <h2 class="live-h2 first">Waiting for you <span class="count">{{len $v.Reviews}}</span></h2>
+  <section class="live-reviews" aria-label="Waiting for your review">
+    {{range $v.Reviews}}
+    <a class="reviewcard" href="/d/{{.Ref}}" data-ref="{{.Ref}}">
+      <div class="lc-top"><span class="dtype">{{.Type}}</span><span class="grow"></span><span class="lc-for" title="submitted {{date .UpdatedAt}}">waiting {{ago .UpdatedAt}}</span></div>
+      <div class="lc-ref"><span class="pkey">{{.Project}}</span> {{.Ref}}{{if gt .Revision 1}} · r{{.Revision}}{{end}}</div>
+      <div class="lc-title">{{.Title}}</div>
+      <div class="lc-meta"><span class="who">{{.Author}}</span></div>
+    </a>
+    {{end}}
+  </section>
+  <h2 class="live-h2">In progress</h2>
+  {{end}}
 
   <section class="live-now" aria-label="In progress">
     {{range $v.Now}}
@@ -48,7 +63,7 @@
     <li class="ev ev-{{.Kind}}">
       <time data-local="time" datetime="{{.CreatedAt}}">{{date .CreatedAt}}</time>
       <span class="ev-ic" aria-hidden="true">{{if eq .Kind "done"}}✔{{else if eq .Kind "started"}}▶{{else if eq .Kind "review"}}◐{{else if eq .Kind "overlap"}}⚠{{else if eq .Kind "plan"}}✎{{else if eq .Kind "approved"}}✓{{else if eq .Kind "changes"}}↺{{else if eq .Kind "shipped"}}⚑{{else}}✕{{end}}</span>
-      <a class="ref" href="/r/{{.Ref}}"{{if or (eq .Kind "done") (eq .Kind "started") (eq .Kind "review") (eq .Kind "overlap") (eq .Kind "cancelled")}} data-ref="{{.Ref}}"{{end}}>{{.Ref}}</a>
+      <a class="ref" href="/r/{{.Ref}}"{{if ne .Kind "shipped"}} data-ref="{{.Ref}}"{{end}}>{{.Ref}}</a>
       <span class="ev-what">{{if eq .Kind "done"}}done{{else if eq .Kind "started"}}started{{else if eq .Kind "review"}}to review{{else if eq .Kind "overlap"}}overlaps{{else if eq .Kind "plan"}}submitted for review{{else if eq .Kind "approved"}}approved{{else if eq .Kind "changes"}}changes requested{{else if eq .Kind "shipped"}}shipped{{else}}cancelled{{end}}</span>
       <span class="ev-title ellipsis" {{if eq .Kind "overlap"}}title="{{.Detail}}"{{end}}>{{.Title}}</span>
       {{if and (eq .Kind "done") .Files}}<span class="chip diff">{{.Files}} file{{if ne .Files 1}}s{{end}} <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span></span>{{end}}

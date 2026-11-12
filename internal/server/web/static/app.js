@@ -62,6 +62,12 @@
   function after(spec, res, form) {
     spec = spec || 'reload';
     if (spec === 'none') return;
+    if (spec === 'close-peek') { // a decision made in the quick view: close it and show the page as it is now
+      $('#peek').close();
+      toast('Done');
+      refresh();
+      return;
+    }
     if (spec === 'reset') {
       form.reset();
       refresh().then(() => { const f = form.id ? document.getElementById(form.id) : null; const i = f && f.querySelector('input,textarea'); i && i.focus(); });
@@ -165,7 +171,8 @@
     if (list) peek.list = list;
     peek.idx = peek.list.indexOf(ref);
     const dlg = $('#peek');
-    const res = await fetch('/i/' + encodeURIComponent(ref) + '/peek');
+    const kind = /-D\d+$/i.test(ref) ? '/d/' : '/i/'; // a document (API-D3) or an item
+    const res = await fetch(kind + encodeURIComponent(ref) + '/peek');
     if (!res.ok) { toast(await res.text(), true); return; }
     dlg.innerHTML = await res.text();
     const pos = $('.peek-pos', dlg);
@@ -214,10 +221,10 @@
     }
     // Live page: its cards and the stories in its feed open in the quick view too;
     // ← and → step through the cards (or the feed's stories) around it.
-    const live = e.target.closest('#main .livecard[data-ref], #main .live-feed a[data-ref]');
+    const live = e.target.closest('#main .livecard[data-ref], #main .reviewcard[data-ref], #main .live-feed a[data-ref]');
     if (live && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
       e.preventDefault();
-      const scope = live.closest('.live-now, .live-feed');
+      const scope = live.closest('.live-now, .live-reviews, .live-feed');
       const refs = [...new Set([...scope.querySelectorAll('[data-ref]')].map((el) => el.dataset.ref))];
       openPeek(live.dataset.ref, refs);
       return;

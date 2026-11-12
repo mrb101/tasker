@@ -1,0 +1,40 @@
+{{define "docpeek"}}{{$d := .Doc}}
+<div class="peek" data-ref="{{$d.Ref}}">
+  <header class="peek-head">
+    <div class="row">
+      <span class="dtype">{{$d.Type}}</span> <span class="ref big">{{$d.Ref}}</span> {{template "docstatus" $d.Status}}
+      <span class="muted small">r{{$d.Revision}} · by {{$d.Author}} · {{ago $d.UpdatedAt}}</span>
+      <span class="grow"></span>
+      <span class="peek-pos muted small"></span>
+      <button class="x peek-nav" type="button" data-peek="prev" title="Previous (← or k)">‹</button>
+      <button class="x peek-nav" type="button" data-peek="next" title="Next (→ or j)">›</button>
+      <button class="x" type="button" data-peek="close" title="Close (Esc)">×</button>
+    </div>
+    <h2 class="peek-title">{{$d.Title}}</h2>
+    {{if $d.Links}}<div class="card-meta">
+      {{range $d.Links}}<a class="chip" href="/r/{{.Target}}" {{if eq .Kind "item"}}data-peek-ref="{{.Target}}"{{end}} title="{{.Title}}">{{.Role}} <b>{{.Target}}</b> {{.Title}}</a>{{end}}
+    </div>{{end}}
+  </header>
+
+  <div class="peek-scroll">
+    {{if gt $d.Revision 1}}<p class="muted small">Revision {{$d.Revision}} — <a href="/d/{{$d.Ref}}?view=diff">what changed since r{{sub $d.Revision 1}}</a></p>{{end}}
+    <div class="md body">{{if $d.Body}}{{md $d.Body}}{{else}}<p class="empty">Empty document.</p>{{end}}</div>
+    {{if $d.Comments}}<p class="muted small">{{len $d.Comments}} comment(s) — open the full page to read the thread.</p>{{end}}
+  </div>
+
+  <form id="peekchanges" class="peek-changes" data-api="POST /api/docs/{{$d.Ref}}/actions/request_changes" data-then="close-peek" hidden>
+    <label>What should change? <textarea name="comment" rows="4" required placeholder="Markdown. The agent sees this with `tasker doc wait`."></textarea></label>
+    <div class="row end"><button type="button" class="btn" data-toggle="#peekchanges">Cancel</button><button class="btn primary">Request changes</button></div>
+  </form>
+  <footer class="peek-foot">
+    {{if eq $d.Status "in_review"}}
+      <button class="btn primary" data-api="POST /api/docs/{{$d.Ref}}/actions/approve" data-then="close-peek">Approve</button>
+      <button class="btn" type="button" data-toggle="#peekchanges">Request changes</button>
+    {{else}}
+      <span class="muted small">{{label $d.Status}} — nothing to decide here.</span>
+    {{end}}
+    <span class="grow"></span>
+    <a class="btn" href="/d/{{$d.Ref}}">Open full page →</a>
+  </footer>
+</div>
+{{end}}

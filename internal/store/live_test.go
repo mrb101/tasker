@@ -42,10 +42,33 @@ func TestLive(t *testing.T) {
 		t.Fatalf("counts done %d started %d", v.Done, v.Started)
 	}
 
-	// One project only.
+	// Waiting for you: submitted documents, oldest first; approved ones leave.
+	must(s.CreateDoc("me", "API", DocInput{Type: "research", Title: "older", Body: "x", Submit: true}))
+	must(s.CreateDoc("me", "WEB", DocInput{Type: "plan", Title: "newer", Body: "x", Submit: true}))
+	must(s.CreateDoc("me", "API", DocInput{Type: "note", Title: "a draft", Body: "x"}))
+	v = must(s.Live(""))
+	if len(v.Reviews) != 2 || v.Reviews[0].Title != "older" || v.Reviews[1].Title != "newer" {
+		t.Fatalf("reviews %+v", v.Reviews)
+	}
+	must(s.DocAction("me", "API-D1", "approve", ""))
+	if v = must(s.Live("")); len(v.Reviews) != 1 || v.Reviews[0].Ref != "WEB-D1" {
+		t.Fatalf("after approval %+v", v.Reviews)
+	}
+
+	// One project only; a plan created already submitted is in its feed.
 	v = must(s.Live("web"))
-	if v.Project != "WEB" || len(v.Now) != 0 || len(v.Feed) != 2 {
-		t.Fatalf("WEB: %+v", v)
+	kinds = ""
+	for _, e := range v.Feed {
+		kinds += e.Kind + ":" + e.Ref + " "
+	}
+	if v.Project != "WEB" || len(v.Now) != 0 || kinds != "plan:WEB-D1 done:WEB-1 started:WEB-1 " || v.Feed[0].Title != "newer" {
+		t.Fatalf("WEB: %s %+v", kinds, v)
+	}
+	// A revision sent back for review shows again.
+	must(s.DocAction("me", "WEB-D1", "request_changes", "shorter"))
+	must(s.UpdateDoc("me", "WEB-D1", DocPatch{Body: ptr("y")}))
+	if v = must(s.Live("web")); v.Feed[0].Kind != "plan" || len(v.Reviews) != 1 {
+		t.Fatalf("resubmitted: %+v / %d reviews", v.Feed[0], len(v.Reviews))
 	}
 
 	// Bounded: older than a day is gone, and the feed never passes its cap.
