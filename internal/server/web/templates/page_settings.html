@@ -6,6 +6,8 @@
     <label>Key <input value="{{$p.Key}}" disabled></label>
     <label>Name <input name="name" value="{{$p.Name}}"></label>
     <label class="span2">Description <input name="description" value="{{$p.Description}}"></label>
+    <label class="span2">Repository <input name="repo_url" value="{{$p.RepoURL}}" placeholder="https://github.com/you/repo" class="mono"></label>
+    <p class="span2 muted small">Links the files and commits that stories changed. Works with GitHub, Gitea, Forgejo and other hosts with GitHub-style <code>/blob/</code> and <code>/commit/</code> addresses.</p>
     <label class="check span2"><input type="checkbox" name="plan_gate" {{if $p.PlanGate}}checked{{end}}>
       <span><b>Plan gate</b>: an item can only be started when it (or its epic) has an <em>approved</em> plan document.</span></label>
     <div class="span2 row end"><button class="btn primary">Save</button></div>

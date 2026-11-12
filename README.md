@@ -33,7 +33,10 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
 - Dependencies (`blocked_by`) are across queues and projects; cycles are rejected. `next` skips blocked items.
 - Branches: each item gets one (`api-12-rate-limit-login`), recorded when started. Items *may* share a
   branch (e.g. a batch of small review fixes via `item bulk --branch fix/batch`); the UI shows it.
-- tasker never runs git. It records branch names and tells the agent the base branch.
+- The server never runs git. It records branch names and tells the agent the base branch.
+- What a story changed: `tasker finish`, run in the story's worktree, has the CLI read git and record the branch's
+  files and commits since its base. The story page lists them (linked when the project has a repository address
+  in Settings), cards show `+120 −30`, and `tasker item changes [--record]` shows or re-measures them.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
 
 ## Agent setup

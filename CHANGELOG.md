@@ -6,6 +6,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
 
 ## [Unreleased]
 
+### Added
+
+- Stories remember what they changed. `tasker finish`, run in the story's worktree, reads git and records the
+  files (lines added and removed, renames) and commits of the branch since it left its base — the queue's base
+  branch, or the story ahead of it in a stacked queue. The story page lists them, cards and the quick view show
+  the totals, and `tasker item changes` prints them. `tasker item changes --record` measures again, e.g. after
+  review fixes. The server still never runs git; MCP clients pass `changes` to `tasker_finish` themselves.
+- A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
+  and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
+
 ## [0.1.0] - 2026-11-12
 
 The first tagged release.

@@ -22,10 +22,13 @@
     {{if gt .OpenBlockers 0}}<span class="chip warn" title="Waiting on unfinished dependencies">blocked · {{.OpenBlockers}}</span>{{end}}
     {{if .ClaimedBy}}<span class="chip who" title="Claimed until {{date .ClaimExpires}}">⚑ {{.ClaimedBy}}</span>{{else if .Assignee}}<span class="chip who">{{.Assignee}}</span>{{end}}
     {{if .Branch}}<code class="branch" title="branch">{{.Branch}}</code>{{end}}
+    {{if .ChangedFiles}}<span class="chip diff" title="{{.ChangedFiles}} file(s) changed"><span class="add">+{{.LinesAdded}}</span><span class="del">−{{.LinesDeleted}}</span></span>{{end}}
     {{range .Labels}}<span class="chip lbl">{{.}}</span>{{end}}
   </div>
 </article>
 {{end}}
+
+{{define "sha"}}{{if .Repo}}<a class="sha mono" href="{{.Repo}}/commit/{{.SHA}}" target="_blank" rel="noopener" title="{{.SHA}}">{{shortSHA .SHA}}</a>{{else}}<code class="sha" title="{{.SHA}}">{{shortSHA .SHA}}</code>{{end}}{{end}}
 
 {{define "itemrow"}}
 <tr>

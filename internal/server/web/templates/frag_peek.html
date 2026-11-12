@@ -14,6 +14,7 @@
       {{if $it.Epic}}<a class="chip epic" href="/e/{{$it.Epic}}" title="{{$it.EpicTitle}}">{{$it.Epic}} · {{$it.EpicTitle}}</a>{{end}}
       {{if $it.Queue}}<span class="chip">queue {{$it.Queue}}</span>{{end}}
       {{if $it.Branch}}<code class="branch">{{$it.Branch}}</code>{{end}}
+      {{if $it.ChangedFiles}}<span class="chip diff">{{$it.ChangedFiles}} file{{if ne $it.ChangedFiles 1}}s{{end}} <span class="add">+{{$it.LinesAdded}}</span><span class="del">−{{$it.LinesDeleted}}</span></span>{{end}}
       {{if $it.ClaimedBy}}<span class="chip who">⚑ {{$it.ClaimedBy}}</span>{{else if $it.Assignee}}<span class="chip who">{{$it.Assignee}}</span>{{end}}
       {{range $it.Labels}}<span class="chip lbl">{{.}}</span>{{end}}
     </div>

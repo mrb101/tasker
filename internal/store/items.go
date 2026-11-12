@@ -14,7 +14,9 @@ const itemSelect = `SELECT i.id, i.project_id, p.key, i.number, i.type, i.title,
 	(SELECT count(*) FROM item_links l JOIN items b ON b.id = l.from_id
 		WHERE l.to_id = i.id AND l.kind = 'blocks' AND b.status NOT IN ('done','cancelled')),
 	COALESCE((SELECT group_concat(label, ',') FROM item_labels WHERE item_id = i.id), ''),
-	COALESCE(r.number, 0), i.stretch
+	COALESCE(r.number, 0), i.stretch,
+	COALESCE((SELECT position || ' ' || added || ' ' || deleted FROM item_files WHERE item_id = i.id AND source = 'changed-total'),
+		(SELECT count(*) || ' ' || COALESCE(sum(added), 0) || ' ' || COALESCE(sum(max(deleted, 0)), 0) FROM item_files WHERE item_id = i.id AND source = 'changed'))
 FROM items i
 JOIN projects p ON p.id = i.project_id
 LEFT JOIN epics e ON e.id = i.epic_id
@@ -24,14 +26,15 @@ LEFT JOIN releases r ON r.id = i.release_id`
 func scanItem(row interface{ Scan(...any) error }) (*Item, error) {
 	it := &Item{}
 	var prio, epicNum, relNum, stretch int
-	var labels string
+	var labels, changed string
 	err := row.Scan(&it.ID, &it.ProjectID, &it.Project, &it.Number, &it.Type, &it.Title, &it.Body, &it.Status, &prio,
 		&epicNum, &it.EpicTitle, &it.QueueID, &it.Queue, &it.QueuePos,
 		&it.Assignee, &it.Branch, &it.PRURL, &it.ClaimedBy, &it.ClaimExpires, &it.Version, &it.CreatedAt, &it.UpdatedAt, &it.ClosedAt,
-		&it.OpenBlockers, &labels, &relNum, &stretch)
+		&it.OpenBlockers, &labels, &relNum, &stretch, &changed)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Sscan(changed, &it.ChangedFiles, &it.LinesAdded, &it.LinesDeleted)
 	if relNum > 0 {
 		it.Release = relRef(it.Project, relNum)
 		it.Stretch = stretch == 1
@@ -355,6 +358,9 @@ func (s *Store) GetItem(ref string) (*Item, error) {
 		}
 	}
 	if it.Docs, err = s.docRefsFor(KindItem, it.ID); err != nil {
+		return nil, err
+	}
+	if it.Changes, err = s.changes(s.db, it.ID); err != nil {
 		return nil, err
 	}
 	if it.Comments, err = s.comments(KindItem, it.ID); err != nil {

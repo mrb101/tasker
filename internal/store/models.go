@@ -72,6 +72,7 @@ type Project struct {
 	PlanGate     bool           `json:"plan_gate"`
 	ReleaseMode  string         `json:"release_mode"`  // date: ship on the date with what is done; scope: ship when the scope is done
 	ReleaseWeeks int            `json:"release_weeks"` // the rhythm of a date-mode project; 0 = no rhythm
+	RepoURL      string         `json:"repo_url"`      // e.g. https://github.com/you/repo; links files and commits
 	CreatedAt    string         `json:"created_at"`
 	UpdatedAt    string         `json:"updated_at"`
 	Counts       *ProjectCounts `json:"counts,omitempty"`
@@ -125,6 +126,11 @@ type Item struct {
 
 	OpenBlockers int `json:"open_blockers"`
 
+	// What the item's branch changed, as recorded by `tasker finish` (totals; details in Changes).
+	ChangedFiles int `json:"changed_files,omitempty"`
+	LinesAdded   int `json:"lines_added,omitempty"`
+	LinesDeleted int `json:"lines_deleted,omitempty"`
+
 	Release string `json:"release,omitempty"` // ref, e.g. API-R2
 	Stretch bool   `json:"stretch,omitempty"` // in the release as a stretch, not a commitment
 
@@ -134,6 +140,7 @@ type Item struct {
 	Related      []ItemRef  `json:"related,omitempty"`
 	SharesBranch []ItemRef  `json:"shares_branch_with,omitempty"`
 	Docs         []DocRef   `json:"docs,omitempty"`
+	Changes      *Changes   `json:"changes,omitempty"`
 	Comments     []Comment  `json:"comments,omitempty"`
 	Activity     []Activity `json:"activity,omitempty"`
 }

@@ -46,6 +46,19 @@ func obj(props map[string]any, required ...string) map[string]any {
 	return m
 }
 
+// changesSchema describes store.Changes: what an item's branch changed.
+var changesSchema = obj(map[string]any{
+	"base":     str("Branch the diff was taken against"),
+	"head_sha": str("Commit the diff was taken at"),
+	"files": map[string]any{"type": "array", "description": "Files changed, paths relative to the repository root", "items": obj(map[string]any{
+		"path": str("File path"), "old_path": str("Previous path when renamed"),
+		"added": map[string]any{"type": "integer"}, "deleted": map[string]any{"type": "integer"}, "binary": boolean("Binary file"),
+	}, "path")},
+	"commits": map[string]any{"type": "array", "description": "Commits on the branch, newest first", "items": obj(map[string]any{
+		"sha": str("Full commit id"), "subject": str("First line of the message"), "authored_at": str("RFC 3339 time"),
+	}, "sha")},
+})
+
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 func strs(desc string) map[string]any {
 	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": desc}
@@ -179,8 +192,9 @@ var mcpTools = []mcpTool{
 		},
 	},
 	{
-		Name: "tasker_finish", Description: "Finish an item: status review (PR open, default) or done; releases the claim.",
-		InputSchema: obj(map[string]any{"ref": str("Item ref"), "pr_url": str("Pull request URL"), "status": enum("", []string{"review", "done"}), "comment": str("Summary of what was done")}, "ref"),
+		Name: "tasker_finish", Description: "Finish an item: status review (PR open, default) or done; releases the claim. Pass changes (from git diff --numstat BASE...HEAD and git log BASE..HEAD) so tasker knows which files the item touched.",
+		InputSchema: obj(map[string]any{"ref": str("Item ref"), "pr_url": str("Pull request URL"), "status": enum("", []string{"review", "done"}), "comment": str("Summary of what was done"),
+			"changes": changesSchema}, "ref"),
 		run: func(s *Server, actor string, raw json.RawMessage) (any, error) {
 			a, err := args[struct {
 				Ref string `json:"ref"`
@@ -309,7 +323,7 @@ var mcpTools = []mcpTool{
 
 const mcpInstructions = `tasker tracks work for coding agents. Concepts: project (key like API) → epics (API-E1) group items (API-12: story/bug/security/research/chore).
 A queue is one git worktree; items in a queue run in order, one branch each. Documents (API-D3: research, plan, review, decision) are reviewed by a human.
-Typical loop: tasker_next → (write plan with tasker_create_doc submit=true if needed; poll tasker_get until approved) → tasker_start → implement on the given branch → tasker_finish with pr_url.`
+Typical loop: tasker_next → (write plan with tasker_create_doc submit=true if needed; poll tasker_get until approved) → tasker_start → implement on the given branch (put the item ref in commit messages and the PR title) → tasker_finish with pr_url and changes.`
 
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	var req rpcReq

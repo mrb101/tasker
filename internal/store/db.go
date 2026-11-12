@@ -326,6 +326,35 @@ CREATE TABLE releases (
 ALTER TABLE items ADD COLUMN release_id INTEGER REFERENCES releases(id) ON DELETE SET NULL;
 ALTER TABLE items ADD COLUMN stretch INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX items_release ON items(release_id);
+`, `
+ALTER TABLE projects ADD COLUMN repo_url TEXT NOT NULL DEFAULT '';
+CREATE TABLE item_files (
+	item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+	path TEXT NOT NULL,
+	source TEXT NOT NULL,
+	old_path TEXT NOT NULL DEFAULT '',
+	added INTEGER NOT NULL DEFAULT 0,
+	deleted INTEGER NOT NULL DEFAULT 0,
+	line_start INTEGER NOT NULL DEFAULT 0,
+	line_end INTEGER NOT NULL DEFAULT 0,
+	snippet TEXT NOT NULL DEFAULT '',
+	at_sha TEXT NOT NULL DEFAULT '',
+	position INTEGER NOT NULL DEFAULT 0,
+	recorded_at TEXT NOT NULL
+);
+CREATE INDEX item_files_item ON item_files(item_id, source);
+CREATE INDEX item_files_path ON item_files(path);
+CREATE TABLE item_commits (
+	item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+	sha TEXT NOT NULL,
+	subject TEXT NOT NULL DEFAULT '',
+	authored_at TEXT NOT NULL DEFAULT '',
+	position INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY(item_id, sha)
+);
+CREATE INDEX item_commits_sha ON item_commits(sha);
+ALTER TABLE items ADD COLUMN head_sha TEXT NOT NULL DEFAULT '';
+ALTER TABLE items ADD COLUMN base_ref TEXT NOT NULL DEFAULT '';
 `}
 
 func (s *Store) migrate() error {

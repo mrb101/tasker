@@ -270,6 +270,20 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		}
 		return st.Finish(actorOf(r), r.PathValue("ref"), in)
 	}))
+	mux.HandleFunc("PUT /api/items/{ref}/changes", h(func(r *http.Request) (any, error) {
+		var in store.Changes
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return st.RecordChanges(actorOf(r), r.PathValue("ref"), in)
+	}))
+	mux.HandleFunc("GET /api/items/{ref}/base", h(func(r *http.Request) (any, error) {
+		base, err := st.ItemBase(r.PathValue("ref"))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"base_branch": base}, nil
+	}))
 
 	// comments (any ref)
 	mux.HandleFunc("POST /api/comments/{ref}", h(func(r *http.Request) (any, error) {

@@ -676,3 +676,15 @@ tr.isdone td { opacity: .6; }
   .btn.small { padding: 6px 10px; }
   .peek-head .x { font-size: 24px; padding: 4px 10px; }
 }
+
+/* what a story's branch changed */
+.add { color: var(--ok); font-family: var(--mono); }
+.del { color: var(--bad); font-family: var(--mono); }
+.chip.diff { gap: 3px; font-size: 11px; }
+.changes .row { gap: 10px; flex-wrap: wrap; }
+.changes table.files { margin-top: 8px; }
+.changes table.files td { padding: 3px 8px; font-size: 12.5px; word-break: break-all; }
+.changes td.num { font-size: 12px; }
+.changes .commits { margin-top: 8px; }
+.changes .commit { display: flex; gap: 8px; padding: 2px 0; min-width: 0; }
+.sha { font-size: 12px; }

@@ -37,12 +37,12 @@ func (s *Store) CreateProject(actor, key, name, description string) (*Project, e
 func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	p := &Project{}
 	var gate int
-	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.ReleaseMode, &p.ReleaseWeeks, &p.CreatedAt, &p.UpdatedAt)
+	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.ReleaseMode, &p.ReleaseWeeks, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
 	p.PlanGate = gate == 1
 	return p, err
 }
 
-const projectCols = `id, key, name, description, plan_gate, release_mode, release_weeks, created_at, updated_at`
+const projectCols = `id, key, name, description, plan_gate, release_mode, release_weeks, repo_url, created_at, updated_at`
 
 func (s *Store) project(q querier, key string) (*Project, error) {
 	p, err := scanProject(q.QueryRow(`SELECT `+projectCols+` FROM projects WHERE key = ?`, strings.ToUpper(strings.TrimSpace(key))))
@@ -175,6 +175,7 @@ type ProjectPatch struct {
 	PlanGate     *bool   `json:"plan_gate"`
 	ReleaseMode  *string `json:"release_mode"`
 	ReleaseWeeks *int    `json:"release_weeks"`
+	RepoURL      *string `json:"repo_url"`
 }
 
 func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, error) {
@@ -210,12 +211,21 @@ func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, erro
 			pr.ReleaseWeeks = *p.ReleaseWeeks
 			changes = append(changes, fmt.Sprintf("release_weeks=%d", pr.ReleaseWeeks))
 		}
+		if p.RepoURL != nil {
+			u := strings.TrimRight(strings.TrimSpace(*p.RepoURL), "/")
+			u = strings.TrimSuffix(u, ".git")
+			if u != "" && !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+				return invalid("repository URL must start with https:// (e.g. https://github.com/you/repo)")
+			}
+			pr.RepoURL = u
+			changes = append(changes, "repo_url")
+		}
 		gate := 0
 		if pr.PlanGate {
 			gate = 1
 		}
-		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, release_mode=?, release_weeks=?, updated_at=? WHERE id=?`,
-			pr.Name, pr.Description, gate, pr.ReleaseMode, pr.ReleaseWeeks, now(), pr.ID); err != nil {
+		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, release_mode=?, release_weeks=?, repo_url=?, updated_at=? WHERE id=?`,
+			pr.Name, pr.Description, gate, pr.ReleaseMode, pr.ReleaseWeeks, pr.RepoURL, now(), pr.ID); err != nil {
 			return err
 		}
 		return t.log(pr.ID, pr.Key, pr.Key, "project.updated", strings.Join(changes, ", "))

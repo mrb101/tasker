@@ -22,6 +22,37 @@
         {{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description. <a href="#" data-toggle="#editform">Add one</a></p>{{end}}
       </div>
 
+      {{with $it.Changes}}
+      <h2>Changes</h2>
+      <div class="panel changes">
+        <div class="row small">
+          <span><b>{{.FileCount}}</b> file{{if ne .FileCount 1}}s{{end}}</span>
+          <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span>
+          <span class="muted">· {{len .Commits}} commit{{if ne (len .Commits) 1}}s{{end}}{{if .Base}} since <code>{{.Base}}</code>{{end}}{{if .HeadSHA}} at {{template "sha" (dict "SHA" .HeadSHA "Repo" $p.RepoURL)}}{{end}}</span>
+          <span class="grow"></span>
+          {{if .RecordedAt}}<span class="muted">recorded {{ago .RecordedAt}}</span>{{end}}
+        </div>
+        {{if .Files}}
+        <table class="list files">
+          <tbody>
+          {{$head := .HeadSHA}}
+          {{range .Files}}
+            <tr><td class="nowrap num">{{if .Binary}}<span class="muted">bin</span>{{else}}<span class="add">+{{.Added}}</span> <span class="del">−{{.Deleted}}</span>{{end}}</td>
+            <td class="w100 mono">{{if .OldPath}}<span class="muted">{{.OldPath}} →</span> {{end}}{{if and $p.RepoURL $head}}<a href="{{$p.RepoURL}}/blob/{{$head}}/{{.Path}}" target="_blank" rel="noopener">{{.Path}}</a>{{else}}{{.Path}}{{end}}</td></tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{end}}
+        {{if .Truncated}}<p class="muted small">Only the first {{len .Files}} of {{.FileCount}} files are listed.</p>{{end}}
+        {{if .Commits}}
+        <details class="small commits">
+          <summary>Commits</summary>
+          {{range .Commits}}<div class="commit">{{template "sha" (dict "SHA" .SHA "Repo" $p.RepoURL)}} <span class="ellipsis">{{.Subject}}</span></div>{{end}}
+        </details>
+        {{end}}
+      </div>
+      {{end}}
+
       <h2>Comments</h2>
       {{template "comments" (dict "List" $it.Comments "Ref" $it.Ref)}}
 

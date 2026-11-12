@@ -121,6 +121,9 @@ func (a *app) printItem(it *store.Item) {
 	for _, d := range it.Docs {
 		fmt.Fprintf(o, "doc:        %s %s %q [%s] (%s)\n", d.Ref, d.Type, d.Title, d.Status, d.Role)
 	}
+	if c := it.Changes; c != nil {
+		fmt.Fprintf(o, "changes:    %s  (tasker item changes %s)\n", changesSummary(c), it.Ref)
+	}
 	fmt.Fprintf(o, "version %d · updated %s\n", it.Version, when(it.UpdatedAt))
 	if strings.TrimSpace(it.Body) != "" {
 		fmt.Fprintf(o, "\n%s\n", strings.TrimRight(it.Body, "\n"))
@@ -319,4 +322,47 @@ func (a *app) printActivity(list []store.Activity) {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", when(e.CreatedAt), e.Actor, e.Action, e.Ref, e.Detail)
 	}
 	w.Flush()
+}
+
+func (a *app) printChanges(it *store.Item) {
+	o := a.out
+	c := it.Changes
+	if c == nil {
+		fmt.Fprintf(o, "%s: no changes recorded (run `tasker item changes %s --record` in its worktree)\n", it.Ref, it.Ref)
+		return
+	}
+	fmt.Fprintf(o, "%s  %s\n%s", it.Ref, it.Title, changesSummary(c))
+	if c.HeadSHA != "" {
+		fmt.Fprintf(o, " at %s", shortSHA(c.HeadSHA))
+	}
+	if c.RecordedAt != "" {
+		fmt.Fprintf(o, " (recorded %s)", when(c.RecordedAt))
+	}
+	fmt.Fprintln(o)
+	w := tw(o)
+	for _, f := range c.Files {
+		counts := fmt.Sprintf("+%d\t−%d", f.Added, f.Deleted)
+		if f.Binary {
+			counts = "bin\t"
+		}
+		name := f.Path
+		if f.OldPath != "" {
+			name = f.OldPath + " → " + f.Path
+		}
+		fmt.Fprintf(w, "  %s\t%s\n", counts, name)
+	}
+	w.Flush()
+	if c.Truncated {
+		fmt.Fprintf(o, "  … %d more file(s) not listed\n", c.FileCount-len(c.Files))
+	}
+	for _, cm := range c.Commits {
+		fmt.Fprintf(o, "  %s %s\n", shortSHA(cm.SHA), cm.Subject)
+	}
+}
+
+func shortSHA(s string) string {
+	if len(s) > 9 {
+		return s[:9]
+	}
+	return s
 }

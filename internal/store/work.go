@@ -137,9 +137,10 @@ func (s *Store) Start(actor, ref string, in StartInput) (*Item, error) {
 }
 
 type FinishInput struct {
-	PRURL   string `json:"pr_url"`
-	Status  string `json:"status"` // review (default) | done
-	Comment string `json:"comment"`
+	PRURL   string   `json:"pr_url"`
+	Status  string   `json:"status"` // review (default) | done
+	Comment string   `json:"comment"`
+	Changes *Changes `json:"changes,omitempty"` // what the branch changed (the CLI fills it from git)
 }
 
 // Finish moves an item to review (or done) and releases its claim.
@@ -166,6 +167,11 @@ func (s *Store) Finish(actor, ref string, in FinishInput) (*Item, error) {
 		if _, err := t.Exec(`UPDATE items SET status = ?, pr_url = ?, claimed_by = '', claim_expires = '', closed_at = ?, version = version + 1, updated_at = ? WHERE id = ?`,
 			in.Status, pr, closed, now(), it.ID); err != nil {
 			return err
+		}
+		if in.Changes != nil {
+			if err := s.recordChangesTx(t, it, in.Changes); err != nil {
+				return err
+			}
 		}
 		if strings.TrimSpace(in.Comment) != "" {
 			if err := s.addCommentTx(t, it.ProjectID, it.Project, KindItem, it.ID, it.Ref, "comment", 0, in.Comment); err != nil {

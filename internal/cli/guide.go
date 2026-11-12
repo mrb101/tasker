@@ -27,7 +27,10 @@ Add --json to any command for machine-readable output.
 - Documents (research, plan, review, decision, note) are reviewed by a human:
   draft → in_review → approved | changes_requested → (update) → in_review ...
 - Dependencies: an item blocked by unfinished items is skipped by ` + "`next`" + ` and cannot start.
-- tasker never runs git. It records branch names; you create/switch branches.
+- The tasker server never runs git. It records branch names; you create/switch branches.
+  The CLI reads git in your worktree on ` + "`finish`" + ` to record what the branch changed (files, commits).
+- Put the item ref in commit messages and the PR title ("API-12: Rate-limit login"), so the work
+  can be traced back to its item even after a squash merge.
 
 ## Work loop
   tasker next                          # next item for this worktree's queue (or -p KEY for project priority)
@@ -37,7 +40,8 @@ Add --json to any command for machine-readable output.
   tasker doc wait API-D3               # exit 0 approved, 10 changes requested (read comments, revise:)
   tasker doc update API-D3 -f plan.md  # new revision, back to review
   # ... implement on the branch, commit, open PR ...
-  tasker finish --pr <url> -m "summary"    # → review (use --done if merged/no PR)
+  tasker finish --pr <url> -m "summary"    # → review (use --done if merged/no PR); records the branch's changes
+  tasker item changes --record             # after pushing review fixes: measure the changes again
 
 ## Creating work
   tasker add "Title" -t bug --priority high -e API-E2 -q auth-lane --blocked-by API-10 -f body.md

@@ -58,12 +58,15 @@ func (a *app) projectCmd() *cobra.Command {
 					fmt.Fprintln(a.out, p.Description)
 				}
 				c := p.Counts
+				if p.RepoURL != "" {
+					fmt.Fprintf(a.out, "repo: %s\n", p.RepoURL)
+				}
 				fmt.Fprintf(a.out, "plan gate: %v\ntriage %d · queued %d · active %d · review %d · done %d\nqueues %d · open epics %d · docs to review %d\n",
 					p.PlanGate, c.Inbox, c.Queued, c.Active, c.Review, c.Done, c.Queues, c.Epics, c.DocsInReview)
 			})
 		},
 	})
-	var name, pdesc, gate, relMode string
+	var name, pdesc, gate, relMode, repoURL string
 	var relWeeks int
 	set := &cobra.Command{
 		Use: "set KEY", Short: "Change project settings", Args: cobra.ExactArgs(1),
@@ -84,6 +87,9 @@ func (a *app) projectCmd() *cobra.Command {
 			if cmd.Flags().Changed("release-weeks") {
 				patch["release_weeks"] = relWeeks
 			}
+			if cmd.Flags().Changed("repo-url") {
+				patch["repo_url"] = repoURL
+			}
 			return call(a, "PATCH", "/api/projects/"+esc(args[0]), patch, func(p *store.Project) {
 				fmt.Fprintf(a.out, "updated %s (plan gate: %v)\n", p.Key, p.PlanGate)
 			})
@@ -92,6 +98,7 @@ func (a *app) projectCmd() *cobra.Command {
 	set.Flags().StringVar(&name, "name", "", "name")
 	set.Flags().StringVarP(&pdesc, "description", "d", "", "description")
 	set.Flags().StringVar(&gate, "plan-gate", "", "on|off: require an approved plan before items can start")
+	set.Flags().StringVar(&repoURL, "repo-url", "", "repository web address, e.g. https://github.com/you/repo (links files and commits)")
 	set.Flags().StringVar(&relMode, "release-mode", "", "date: ship on the date with what is done; scope: ship when the stories are done")
 	set.Flags().IntVar(&relWeeks, "release-weeks", 0, "release rhythm in weeks for date mode (0 = none)")
 	cmd.AddCommand(set)
@@ -283,7 +290,7 @@ func (a *app) itemListCmd(use string) *cobra.Command {
 
 func (a *app) itemCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "item", Aliases: []string{"items", "story", "issue"}, Short: "Manage items"}
-	cmd.AddCommand(a.itemListCmd("list"), a.itemCreateCmd("create"), a.bulkCmd(), a.itemUpdateCmd())
+	cmd.AddCommand(a.itemListCmd("list"), a.itemCreateCmd("create"), a.bulkCmd(), a.itemUpdateCmd(), a.itemChangesCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use: "show REF", Short: "Show an item", Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -595,16 +602,23 @@ func (a *app) startCmd() *cobra.Command {
 
 func (a *app) finishCmd() *cobra.Command {
 	var pr, msg string
-	var done bool
+	var done, noChanges, anyway bool
 	cmd := &cobra.Command{
 		Use:   "finish [REF]",
 		Short: "Finish an item: status review (PR open) or --done; releases the claim",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "Moves the item to review (or done) and releases your claim.\n" +
+			"Run inside the item's worktree, it also records what the branch changed (files, lines, commits)\n" +
+			"from git, measured from the queue's base branch. --no-changes skips that.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := a.client()
-			ref := ""
+			var it *store.Item
+			base, haveBase := "", false
 			if len(args) == 1 {
-				ref = args[0]
+				it = &store.Item{}
+				if err := c.Do("GET", "/api/items/"+esc(args[0]), nil, it); err != nil {
+					return err
+				}
 			} else {
 				path, err := a.nextQuery("")
 				if err != nil {
@@ -617,20 +631,101 @@ func (a *app) finishCmd() *cobra.Command {
 				if n.Item == nil || !n.Resume {
 					return &exitErr{ExitUsage, "error: no active item of yours here; pass REF"}
 				}
-				ref = n.Item.Ref
+				it, base, haveBase = n.Item, n.BaseBranch, true
 			}
-			status := "review"
+			in := store.FinishInput{PRURL: pr, Comment: msg, Status: "review"}
 			if done {
-				status = "done"
+				in.Status = "done"
 			}
-			return call(a, "POST", "/api/items/"+esc(ref)+"/finish", store.FinishInput{PRURL: pr, Status: status, Comment: msg}, func(it *store.Item) {
+			if !noChanges {
+				in.Changes = a.gatherChanges(it, base, haveBase, anyway)
+			}
+			return call(a, "POST", "/api/items/"+esc(it.Ref)+"/finish", in, func(it *store.Item) {
 				fmt.Fprintf(a.out, "%s → %s\n", it.Ref, it.Status)
+				if in.Changes != nil {
+					fmt.Fprintf(a.out, "recorded %s\n", changesSummary(in.Changes))
+				}
 			})
 		},
 	}
 	cmd.Flags().StringVar(&pr, "pr", "", "pull request URL")
 	cmd.Flags().StringVarP(&msg, "message", "m", "", "summary comment")
 	cmd.Flags().BoolVar(&done, "done", false, "mark done instead of review")
+	cmd.Flags().BoolVar(&noChanges, "no-changes", false, "do not record what the branch changed")
+	cmd.Flags().BoolVar(&anyway, "record-anyway", false, "record changes even if this worktree is on another branch")
+	return cmd
+}
+
+// gatherChanges collects an item's changes from git, or warns and returns nil:
+// finishing never fails because the changes could not be measured.
+func (a *app) gatherChanges(it *store.Item, base string, haveBase, anyway bool) *store.Changes {
+	if !haveBase {
+		var b struct {
+			BaseBranch string `json:"base_branch"`
+		}
+		if err := a.client().Do("GET", "/api/items/"+esc(it.Ref)+"/base", nil, &b); err == nil {
+			base = b.BaseBranch
+		}
+	}
+	ch, err := changesForItem(it, base, anyway)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "note: changes not recorded: %v\n", err)
+		return nil
+	}
+	if dirty, _ := git("status", "--porcelain", "--untracked-files=no"); dirty != "" {
+		fmt.Fprintln(os.Stderr, "note: uncommitted changes are not recorded; commit them and run `tasker item changes --record`")
+	}
+	return ch
+}
+
+func (a *app) itemChangesCmd() *cobra.Command {
+	var record, anyway bool
+	cmd := &cobra.Command{
+		Use:   "changes [REF]",
+		Short: "Show what an item's branch changed; --record measures it again from git here",
+		Long: "Shows the files and commits recorded for an item (by `tasker finish`).\n" +
+			"--record measures them again in this worktree, e.g. after pushing review fixes.\n" +
+			"Without REF: your active item in this worktree.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := a.client()
+			it := &store.Item{}
+			if len(args) == 1 {
+				if err := c.Do("GET", "/api/items/"+esc(args[0]), nil, it); err != nil {
+					return err
+				}
+			} else {
+				path, err := a.nextQuery("")
+				if err != nil {
+					return err
+				}
+				var n store.NextResult
+				if err := c.Do("GET", path, nil, &n); err != nil {
+					return err
+				}
+				if n.Item == nil || !n.Resume {
+					return &exitErr{ExitUsage, "error: no active item of yours here; pass REF"}
+				}
+				it = n.Item
+			}
+			if !record {
+				if a.json {
+					return a.printJSON(it.Changes)
+				}
+				a.printChanges(it)
+				return nil
+			}
+			ch := a.gatherChanges(it, "", false, anyway)
+			if ch == nil {
+				return &exitErr{ExitError, ""}
+			}
+			return call(a, "PUT", "/api/items/"+esc(it.Ref)+"/changes", ch, func(it *store.Item) {
+				fmt.Fprintf(a.out, "%s: recorded %s\n", it.Ref, changesSummary(ch))
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&record, "record", false, "measure the changes again from git in this worktree")
+	cmd.Flags().BoolVar(&anyway, "record-anyway", false, "with --record: measure even if this worktree is on another branch")
 	return cmd
 }
 

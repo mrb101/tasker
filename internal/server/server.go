@@ -189,6 +189,12 @@ var funcs = template.FuncMap{
 		return fmt.Sprintf("%d B", n)
 	},
 	// shortRef turns API-E12 into E12 (the project is already on screen).
+	"shortSHA": func(sha string) string {
+		if len(sha) > 9 {
+			return sha[:9]
+		}
+		return sha
+	},
 	"shortRef": func(ref string) string {
 		if i := strings.LastIndex(ref, "-"); i >= 0 {
 			return ref[i+1:]

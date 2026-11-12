@@ -125,6 +125,37 @@ func TestAPIFlowAndPages(t *testing.T) {
 		t.Fatalf("notes: %d", res.StatusCode)
 	}
 
+	// what a branch changed: recorded on finish, linked through the project's repository
+	c, m = req(t, ts, "PATCH", "/api/projects/API", map[string]any{"repo_url": "https://github.com/me/api"})
+	mustStatus(200, c, m)
+	c, m = req(t, ts, "GET", "/api/items/API-1/base", nil)
+	mustStatus(200, c, m)
+	if m["base_branch"] != "main" {
+		t.Fatalf("base: %v", m)
+	}
+	head := strings.Repeat("ab", 20)
+	c, m = req(t, ts, "POST", "/api/items/API-1/finish", map[string]any{"agent": "bot", "changes": map[string]any{
+		"base": "main", "head_sha": head, "files": []map[string]any{{"path": "internal/store/work.go", "added": 7, "deleted": 2}},
+		"commits": []map[string]any{{"sha": head, "subject": "API-1: limit"}}}}, "X-Tasker-Actor", "bot")
+	mustStatus(201, c, m)
+	if m["changed_files"] != float64(1) || m["lines_added"] != float64(7) {
+		t.Fatalf("finish changes: %v", m)
+	}
+	c, m = req(t, ts, "PUT", "/api/items/API-1/changes", map[string]any{"files": []map[string]any{{"path": "/abs"}}})
+	mustStatus(400, c, m)
+	for path, want := range map[string]string{
+		"/i/API-1":      `href="https://github.com/me/api/blob/` + head + `/internal/store/work.go"`,
+		"/i/API-1/peek": `+7`,
+		"/p/API":        `class="chip diff"`,
+	} {
+		res, _ := http.Get(ts.URL + path)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("%s does not show the changes (%s)", path, want)
+		}
+	}
+
 	// every page renders
 	for _, p := range []string{"/", "/reviews", "/search?q=one", "/p/API", "/p/API/items", "/p/API/epics", "/p/API/docs",
 		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/p/API/releases", "/rel/API-R1", "/r/API-R1", "/e/API-E1",
