@@ -34,6 +34,7 @@
     </div>
     {{end}}
     {{if $it.Docs}}<div class="peek-docs">{{template "docrefs" $it.Docs}}</div>{{end}}
+    {{if $it.Locations}}<div class="peek-locs small mono">{{range $it.Locations}}<div class="ellipsis" title="{{.Snippet}}">{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}</div>{{end}}</div>{{end}}
     <div class="md body">{{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description.</p>{{end}}</div>
     {{if $it.Comments}}<p class="muted small">{{len $it.Comments}} comment(s) — open the full page to read them.</p>{{end}}
   </div>

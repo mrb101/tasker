@@ -40,6 +40,9 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
   For stories finished before that, run `tasker backfill -p API` in the repository: it finds each story's
   changes in the git history (its branch, the merge or squash commit of its PR, or commits naming it), shows
   what it found, and saves it with `--apply`. `--gh` also asks GitHub about the story's pull request.
+- Code locations: an item can point at places in the code (`tasker add … --at internal/auth/login.go:40-58`,
+  `locations:` in `item bulk`). Run inside the repository, the CLI pins each one to the current commit and
+  keeps the lines as a snippet, so a review finding still reads right after the code moves.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
 
 ## Agent setup

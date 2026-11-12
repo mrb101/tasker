@@ -688,3 +688,9 @@ tr.isdone td { opacity: .6; }
 .changes .commits { margin-top: 8px; }
 .changes .commit { display: flex; gap: 8px; padding: 2px 0; min-width: 0; }
 .sha { font-size: 12px; }
+
+/* places in the code an item is about */
+.locations .loc + .loc { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.locations .row { gap: 8px; flex-wrap: wrap; word-break: break-all; }
+.locations pre.snippet { tab-size: 4; margin: 6px 0 0; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; overflow-x: auto; font-size: 12px; line-height: 1.45; }
+.peek-locs { margin: 8px 0; color: var(--muted); }

@@ -156,6 +156,25 @@ func TestAPIFlowAndPages(t *testing.T) {
 		}
 	}
 
+	// code locations on a finding: short form, linked to the line, snippet shown
+	c, m = req(t, ts, "PATCH", "/api/items/API-2", map[string]any{"locations": []any{"internal/store/items.go:120-134",
+		map[string]any{"path": "internal/server/api.go", "line": 40, "snippet": "q := r.URL.Query()", "sha": head}}})
+	mustStatus(200, c, m)
+	if locs, _ := m["locations"].([]any); len(locs) != 2 {
+		t.Fatalf("locations: %v", m)
+	}
+	for path, want := range map[string]string{
+		"/i/API-2":      `href="https://github.com/me/api/blob/` + head + `/internal/server/api.go#L40"`,
+		"/i/API-2/peek": `internal/store/items.go:120-134`,
+	} {
+		res, _ := http.Get(ts.URL + path)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if !strings.Contains(string(body), want) || (path == "/i/API-2" && !strings.Contains(string(body), "q := r.URL.Query()")) {
+			t.Fatalf("%s does not show the locations (%s)", path, want)
+		}
+	}
+
 	// every page renders
 	for _, p := range []string{"/", "/reviews", "/search?q=one", "/p/API", "/p/API/items", "/p/API/epics", "/p/API/docs",
 		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/p/API/releases", "/rel/API-R1", "/r/API-R1", "/e/API-E1",

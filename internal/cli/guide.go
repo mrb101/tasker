@@ -46,6 +46,7 @@ Add --json to any command for machine-readable output.
 ## Creating work
   tasker add "Title" -t bug --priority high -e API-E2 -q auth-lane --blocked-by API-10 -f body.md
   tasker item bulk findings.yaml --doc API-D9      # many items at once (see: tasker item bulk --help)
+  tasker add "SQL built by hand" -t security --at internal/store/items.go:120-134   # point at the code (repeatable)
   tasker epic create "Epic title" -f epic.md
   tasker doc create --type research --for API-E2 -f notes.md
   tasker doc create --type review -f security-review.md --submit   # then file findings with bulk --doc

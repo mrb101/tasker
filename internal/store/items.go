@@ -88,18 +88,19 @@ func (s *Store) item(q querier, ref string) (*Item, error) {
 }
 
 type ItemInput struct {
-	Type      string   `json:"type"`
-	Title     string   `json:"title"`
-	Body      string   `json:"body"`
-	Status    string   `json:"status"`
-	Priority  string   `json:"priority"`
-	Epic      string   `json:"epic"`
-	Queue     string   `json:"queue"`
-	QueueTop  bool     `json:"queue_top"`
-	Labels    []string `json:"labels"`
-	Assignee  string   `json:"assignee"`
-	Branch    string   `json:"branch"`
-	BlockedBy []string `json:"blocked_by"`
+	Type      string     `json:"type"`
+	Title     string     `json:"title"`
+	Body      string     `json:"body"`
+	Status    string     `json:"status"`
+	Priority  string     `json:"priority"`
+	Epic      string     `json:"epic"`
+	Queue     string     `json:"queue"`
+	QueueTop  bool       `json:"queue_top"`
+	Labels    []string   `json:"labels"`
+	Assignee  string     `json:"assignee"`
+	Branch    string     `json:"branch"`
+	BlockedBy []string   `json:"blocked_by"`
+	Locations []Location `json:"locations"` // places in the code it is about ("path:12-20" or objects)
 }
 
 func (s *Store) CreateItem(actor, projectKey string, in ItemInput) (*Item, error) {
@@ -223,6 +224,11 @@ func (s *Store) createItemTx(t *txc, pr *Project, in ItemInput) (int64, string, 
 	id, _ := res.LastInsertId()
 	for _, l := range normLabels(in.Labels) {
 		if _, err := t.Exec(`INSERT INTO item_labels(item_id, label) VALUES(?,?)`, id, l); err != nil {
+			return 0, "", err
+		}
+	}
+	if len(in.Locations) > 0 {
+		if err := s.setLocationsTx(t, id, in.Locations); err != nil {
 			return 0, "", err
 		}
 	}
@@ -358,6 +364,9 @@ func (s *Store) GetItem(ref string) (*Item, error) {
 		}
 	}
 	if it.Docs, err = s.docRefsFor(KindItem, it.ID); err != nil {
+		return nil, err
+	}
+	if it.Locations, err = s.locations(s.db, it.ID); err != nil {
 		return nil, err
 	}
 	if it.Changes, err = s.changes(s.db, it.ID); err != nil {
@@ -560,22 +569,23 @@ func itemWhere(f ItemFilter) (string, []any, error) {
 // ---- update ----
 
 type ItemPatch struct {
-	Title        *string   `json:"title"`
-	Body         *string   `json:"body"`
-	Type         *string   `json:"type"`
-	Status       *string   `json:"status"`
-	Priority     *string   `json:"priority"`
-	Epic         *string   `json:"epic"`  // "" clears
-	Queue        *string   `json:"queue"` // "" removes from queue (back to inbox)
-	Assignee     *string   `json:"assignee"`
-	Branch       *string   `json:"branch"`
-	PRURL        *string   `json:"pr_url"`
-	Labels       *[]string `json:"labels"`
-	Release      *string   `json:"release"` // a release ref, or "" to take it out of its release
-	Stretch      *bool     `json:"stretch"` // in its release as a stretch rather than a commitment
-	AddLabels    []string  `json:"add_labels"`
-	RemoveLabels []string  `json:"remove_labels"`
-	IfVersion    int       `json:"if_version"`
+	Title        *string     `json:"title"`
+	Body         *string     `json:"body"`
+	Type         *string     `json:"type"`
+	Status       *string     `json:"status"`
+	Priority     *string     `json:"priority"`
+	Epic         *string     `json:"epic"`  // "" clears
+	Queue        *string     `json:"queue"` // "" removes from queue (back to inbox)
+	Assignee     *string     `json:"assignee"`
+	Branch       *string     `json:"branch"`
+	PRURL        *string     `json:"pr_url"`
+	Labels       *[]string   `json:"labels"`
+	Release      *string     `json:"release"`   // a release ref, or "" to take it out of its release
+	Stretch      *bool       `json:"stretch"`   // in its release as a stretch rather than a commitment
+	Locations    *[]Location `json:"locations"` // replaces the item's code locations; [] clears them
+	AddLabels    []string    `json:"add_labels"`
+	RemoveLabels []string    `json:"remove_labels"`
+	IfVersion    int         `json:"if_version"`
 }
 
 func (s *Store) UpdateItem(actor, ref string, p ItemPatch) (*Item, error) {
@@ -596,7 +606,7 @@ func (s *Store) BulkUpdate(actor, projectKey string, refs []string, p ItemPatch)
 	if len(refs) > 1000 {
 		return nil, invalid("at most 1000 items at once")
 	}
-	if p.Title != nil || p.Body != nil || p.Branch != nil || p.PRURL != nil || p.Labels != nil || p.IfVersion != 0 {
+	if p.Title != nil || p.Body != nil || p.Branch != nil || p.PRURL != nil || p.Labels != nil || p.Locations != nil || p.IfVersion != 0 {
 		return nil, invalid("a bulk change can set status, priority, type, epic, queue, assignee and labels only")
 	}
 	key := strings.ToUpper(projectKey)
@@ -771,6 +781,12 @@ func (s *Store) updateItemTx(t *txc, ref string, p ItemPatch) error {
 			}
 		}
 		changes = append(changes, "labels")
+	}
+	if p.Locations != nil {
+		if err := s.setLocationsTx(t, it.ID, *p.Locations); err != nil {
+			return err
+		}
+		changes = append(changes, "locations")
 	}
 	if p.Queue != nil {
 		if *p.Queue == "" {

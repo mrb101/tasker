@@ -125,3 +125,31 @@ func TestCollectChanges(t *testing.T) {
 		t.Fatal("missing base accepted")
 	}
 }
+
+func TestEnrichLocations(t *testing.T) {
+	dir := gitRepo(t) // on api-1-rate-limit; a.go has 5 lines at HEAD
+	head, _ := git("rev-parse", "HEAD")
+	os.MkdirAll(filepath.Join(dir, "sub"), 0o755)
+	os.WriteFile(filepath.Join(dir, "sub", "new.go"), []byte("package sub\n"), 0o644) // untracked
+	t.Chdir(filepath.Join(dir, "sub"))
+	locs, err := parseLocations([]string{"a.go:3-4", filepath.Join(dir, "b.go"), "new.go:1", "missing.go:2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrichLocations(locs)
+	if l := locs[0]; l.Path != "a.go" || l.SHA != head || l.Snippet != "func A() { B() }\n" {
+		t.Fatalf("tracked %+v", l)
+	}
+	if l := locs[1]; l.Path != "b.go" || l.SHA != head || l.Snippet != "" {
+		t.Fatalf("absolute %+v", l)
+	}
+	if l := locs[2]; l.Path != "sub/new.go" || l.SHA != "" {
+		t.Fatalf("untracked, relative to cwd %+v", l)
+	}
+	if l := locs[3]; l.Path != "missing.go" || l.SHA != "" {
+		t.Fatalf("missing %+v", l)
+	}
+	if got := snippet("1\n2\n3", 2, 9); got != "2\n3" {
+		t.Fatalf("snippet past the end %q", got)
+	}
+}

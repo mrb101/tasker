@@ -22,6 +22,19 @@
         {{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description. <a href="#" data-toggle="#editform">Add one</a></p>{{end}}
       </div>
 
+      {{if $it.Locations}}
+      <h2>In the code</h2>
+      <div class="panel locations">
+        {{range $it.Locations}}
+        <div class="loc">
+          <div class="row small"><span class="mono">{{if $p.RepoURL}}<a href="{{$p.RepoURL}}/blob/{{or .SHA "HEAD"}}/{{.Path}}{{if .Line}}#L{{.Line}}{{if .EndLine}}-L{{.EndLine}}{{end}}{{end}}" target="_blank" rel="noopener">{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}</a>{{else}}{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}{{end}}</span>
+            {{if .SHA}}<span class="muted">at {{template "sha" (dict "SHA" .SHA "Repo" $p.RepoURL)}}</span>{{end}}</div>
+          {{if .Snippet}}<pre class="snippet"><code>{{.Snippet}}</code></pre>{{end}}
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+
       {{with $it.Changes}}
       <h2>Changes</h2>
       <div class="panel changes">

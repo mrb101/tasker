@@ -80,7 +80,16 @@ func args[T any](raw json.RawMessage) (T, error) {
 	return v, nil
 }
 
+// locationsSchema describes code locations: "path:12-20" strings or objects.
+var locationsSchema = map[string]any{"type": "array", "description": "Places in the code the item is about (review findings, crash sites). Paths relative to the repository root; include sha (the commit you looked at) and snippet (the lines) when you can.",
+	"items": map[string]any{"anyOf": []any{
+		str("path, path:line or path:start-end"),
+		obj(map[string]any{"path": str("File path"), "line": map[string]any{"type": "integer"}, "end_line": map[string]any{"type": "integer"},
+			"snippet": str("The lines, verbatim"), "sha": str("Commit the lines refer to")}, "path"),
+	}}}
+
 var itemSchema = map[string]any{
+	"locations":  locationsSchema,
 	"title":      str("Short title"),
 	"body":       str("Markdown description"),
 	"type":       enum("Item type", store.ItemTypes),
@@ -165,7 +174,7 @@ var mcpTools = []mcpTool{
 		InputSchema: obj(map[string]any{
 			"ref": str("Item ref"), "title": str(""), "body": str("Markdown"), "type": enum("", store.ItemTypes), "status": enum("", store.ItemStatuses),
 			"priority": enum("", store.Priorities), "epic": str("Epic ref or ''"), "queue": str("Queue name or ''"), "assignee": str(""),
-			"branch": str(""), "pr_url": str(""), "add_labels": strs(""), "remove_labels": strs(""),
+			"branch": str(""), "pr_url": str(""), "add_labels": strs(""), "remove_labels": strs(""), "locations": locationsSchema,
 			"release": str("Release ref, e.g. API-R2, or '' to take it out"), "stretch": boolean("In its release as a stretch rather than a commitment"),
 			"if_version": map[string]any{"type": "integer", "description": "Fail if the item changed since this version"},
 		}, "ref"),

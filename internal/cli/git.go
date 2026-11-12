@@ -3,7 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -201,4 +203,84 @@ func changesSummary(c *store.Changes) string {
 		s += " — " + c.Via
 	}
 	return s
+}
+
+const maxSnippetLines = 15
+
+// enrichLocations makes code locations relative to the repository root and,
+// where the file is tracked, pins them to HEAD and fills in the snippet, so a
+// finding stays readable after the code moves. Outside a git worktree it
+// changes nothing.
+func enrichLocations(locs []store.Location) {
+	if len(locs) == 0 {
+		return
+	}
+	root, err := git("rev-parse", "--show-toplevel")
+	if err != nil {
+		return
+	}
+	head, _ := git("rev-parse", "HEAD")
+	cwd, _ := os.Getwd()
+	for i := range locs {
+		l := &locs[i]
+		p := filepath.FromSlash(l.Path)
+		switch {
+		case filepath.IsAbs(p):
+			if rel, err := filepath.Rel(root, p); err == nil && !strings.HasPrefix(rel, "..") {
+				l.Path = filepath.ToSlash(rel)
+			}
+		case !fileExists(filepath.Join(root, p)) && fileExists(filepath.Join(cwd, p)):
+			// given relative to the current directory, not the repository root
+			if rel, err := filepath.Rel(root, filepath.Join(cwd, p)); err == nil && !strings.HasPrefix(rel, "..") {
+				l.Path = filepath.ToSlash(rel)
+			}
+		}
+		if head == "" {
+			continue
+		}
+		body, err := git("show", head+":"+l.Path)
+		if err != nil {
+			continue // not tracked at HEAD (new or misspelt): leave it unpinned
+		}
+		if l.SHA == "" {
+			l.SHA = head
+		}
+		if l.Snippet == "" && l.Line > 0 {
+			l.Snippet = snippet(body, l.Line, l.EndLine)
+		}
+	}
+}
+
+func snippet(body string, line, end int) string {
+	if end < line {
+		end = line
+	}
+	if end-line >= maxSnippetLines {
+		end = line + maxSnippetLines - 1
+	}
+	lines := strings.Split(body, "\n")
+	if line > len(lines) {
+		return ""
+	}
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return strings.Join(lines[line-1:end], "\n")
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+func parseLocations(specs []string) ([]store.Location, error) {
+	var out []store.Location
+	for _, s := range specs {
+		l, err := store.ParseLocation(s)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, nil
 }

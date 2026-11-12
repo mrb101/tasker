@@ -140,6 +140,7 @@ type Item struct {
 	Related      []ItemRef  `json:"related,omitempty"`
 	SharesBranch []ItemRef  `json:"shares_branch_with,omitempty"`
 	Docs         []DocRef   `json:"docs,omitempty"`
+	Locations    []Location `json:"locations,omitempty"`
 	Changes      *Changes   `json:"changes,omitempty"`
 	Comments     []Comment  `json:"comments,omitempty"`
 	Activity     []Activity `json:"activity,omitempty"`

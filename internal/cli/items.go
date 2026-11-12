@@ -219,7 +219,7 @@ func (a *app) epicCmd() *cobra.Command {
 
 type itemFlags struct {
 	typ, priority, epic, queue, body, file, branch, assignee string
-	labels, blockedBy                                        []string
+	labels, blockedBy, at                                    []string
 	top                                                      bool
 }
 
@@ -236,8 +236,13 @@ func (a *app) itemCreateCmd(use string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			locs, err := parseLocations(f.at)
+			if err != nil {
+				return err
+			}
+			enrichLocations(locs)
 			in := store.ItemInput{Title: args[0], Body: text, Type: f.typ, Priority: f.priority, Epic: f.epic, Queue: f.queue, QueueTop: f.top,
-				Labels: f.labels, BlockedBy: f.blockedBy, Branch: f.branch, Assignee: f.assignee}
+				Labels: f.labels, BlockedBy: f.blockedBy, Branch: f.branch, Assignee: f.assignee, Locations: locs}
 			return call(a, "POST", "/api/projects/"+esc(p)+"/items", in, func(it *store.Item) {
 				where := "triage"
 				if it.Queue != "" {
@@ -259,6 +264,7 @@ func (a *app) itemCreateCmd(use string) *cobra.Command {
 	fl.StringVarP(&f.file, "file", "f", "", "read description from file (- for stdin)")
 	fl.StringVar(&f.branch, "branch", "", "branch name (share one branch between items)")
 	fl.StringVar(&f.assignee, "assignee", "", "assignee")
+	fl.StringArrayVar(&f.at, "at", nil, "a place in the code it is about: PATH, PATH:LINE or PATH:START-END (repeatable)")
 	return cmd
 }
 
@@ -316,7 +322,8 @@ func (a *app) lsAlias() *cobra.Command {
 func (a *app) itemUpdateCmd() *cobra.Command {
 	var title, body, file, typ, status, prio, epic, queue, assignee, branch, pr, release string
 	var stretch, committed bool
-	var addL, rmL []string
+	var addL, rmL, at []string
+	var clearAt bool
 	var ifVersion int
 	cmd := &cobra.Command{
 		Use:   "update REF...",
@@ -359,7 +366,21 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 			if ifVersion > 0 {
 				patch["if_version"] = ifVersion
 			}
+			if len(at) > 0 || clearAt {
+				locs, err := parseLocations(at)
+				if err != nil {
+					return err
+				}
+				enrichLocations(locs)
+				if locs == nil {
+					locs = []store.Location{}
+				}
+				patch["locations"] = locs
+			}
 			if len(args) > 1 {
+				if _, ok := patch["locations"]; ok {
+					return &exitErr{ExitUsage, "error: --at applies to one item at a time"}
+				}
 				if _, ok := patch["title"]; ok {
 					return &exitErr{ExitUsage, "error: --title, --body and --branch apply to one item at a time"}
 				}
@@ -392,6 +413,8 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 	fl.StringVar(&release, "release", "", "release ref ('' = out of its release)")
 	fl.BoolVar(&stretch, "stretch", false, "in its release as a stretch")
 	fl.BoolVar(&committed, "committed", false, "in its release as a commitment")
+	fl.StringArrayVar(&at, "at", nil, "replace the item's code locations: PATH[:LINE[-END]] (repeatable)")
+	fl.BoolVar(&clearAt, "clear-at", false, "remove the item's code locations")
 	fl.StringSliceVar(&addL, "add-label", nil, "add labels")
 	fl.StringSliceVar(&rmL, "rm-label", nil, "remove labels")
 	fl.IntVar(&ifVersion, "if-version", 0, "fail with exit 4 if the item changed since this version")
@@ -417,10 +440,13 @@ func (a *app) bulkCmd() *cobra.Command {
       priority: high
       body: |
         markdown...
+      locations:        # places in the code: path, path:line or path:start-end
+        - internal/auth/login.go:40-58
     - title: Add lockout alert
       blocked_by: [a, API-12]
 
-A plain list of items is accepted too.`,
+A plain list of items is accepted too. Run inside the repository, locations are pinned to
+the current commit and get the code's lines as a snippet.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.requireProject()
@@ -454,6 +480,17 @@ A plain list of items is accepted too.`,
 			}
 			b, err := json.Marshal(m)
 			if err != nil {
+				return err
+			}
+			// Pin code locations to this checkout (commit and snippet), as item create --at does.
+			var in store.BulkInput
+			if err := json.Unmarshal(b, &in); err != nil {
+				return fmt.Errorf("%s: %w", args[0], err)
+			}
+			for i := range in.Items {
+				enrichLocations(in.Items[i].Locations)
+			}
+			if b, err = json.Marshal(in); err != nil {
 				return err
 			}
 			return call(a, "POST", "/api/projects/"+esc(p)+"/items/bulk", json.RawMessage(b), func(items []*store.Item) {

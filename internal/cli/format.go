@@ -121,6 +121,16 @@ func (a *app) printItem(it *store.Item) {
 	for _, d := range it.Docs {
 		fmt.Fprintf(o, "doc:        %s %s %q [%s] (%s)\n", d.Ref, d.Type, d.Title, d.Status, d.Role)
 	}
+	for _, l := range it.Locations {
+		fmt.Fprintf(o, "at:         %s", l)
+		if l.SHA != "" {
+			fmt.Fprintf(o, " (at %s)", shortSHA(l.SHA))
+		}
+		fmt.Fprintln(o)
+		if l.Snippet != "" {
+			fmt.Fprintln(o, indent(l.Snippet, "            │ "))
+		}
+	}
 	if c := it.Changes; c != nil {
 		fmt.Fprintf(o, "changes:    %s  (tasker item changes %s)\n", changesSummary(c), it.Ref)
 	}
