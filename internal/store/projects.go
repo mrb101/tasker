@@ -37,12 +37,12 @@ func (s *Store) CreateProject(actor, key, name, description string) (*Project, e
 func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	p := &Project{}
 	var gate int
-	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.ReleaseMode, &p.ReleaseWeeks, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
+	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &gate, &p.ReleaseMode, &p.ReleaseWeeks, &p.RepoURL, &p.RepoHost, &p.RepoFileURL, &p.RepoCommitURL, &p.CreatedAt, &p.UpdatedAt)
 	p.PlanGate = gate == 1
 	return p, err
 }
 
-const projectCols = `id, key, name, description, plan_gate, release_mode, release_weeks, repo_url, created_at, updated_at`
+const projectCols = `id, key, name, description, plan_gate, release_mode, release_weeks, repo_url, repo_host, repo_file_url, repo_commit_url, created_at, updated_at`
 
 func (s *Store) project(q querier, key string) (*Project, error) {
 	p, err := scanProject(q.QueryRow(`SELECT `+projectCols+` FROM projects WHERE key = ?`, strings.ToUpper(strings.TrimSpace(key))))
@@ -170,12 +170,15 @@ func (s *Store) ListProjects() ([]*Project, error) {
 }
 
 type ProjectPatch struct {
-	Name         *string `json:"name"`
-	Description  *string `json:"description"`
-	PlanGate     *bool   `json:"plan_gate"`
-	ReleaseMode  *string `json:"release_mode"`
-	ReleaseWeeks *int    `json:"release_weeks"`
-	RepoURL      *string `json:"repo_url"`
+	Name          *string `json:"name"`
+	Description   *string `json:"description"`
+	PlanGate      *bool   `json:"plan_gate"`
+	ReleaseMode   *string `json:"release_mode"`
+	ReleaseWeeks  *int    `json:"release_weeks"`
+	RepoURL       *string `json:"repo_url"`
+	RepoHost      *string `json:"repo_host"`
+	RepoFileURL   *string `json:"repo_file_url"`
+	RepoCommitURL *string `json:"repo_commit_url"`
 }
 
 func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, error) {
@@ -220,12 +223,47 @@ func (s *Store) UpdateProject(actor, key string, p ProjectPatch) (*Project, erro
 			pr.RepoURL = u
 			changes = append(changes, "repo_url")
 		}
+		if p.RepoHost != nil {
+			h := strings.ToLower(strings.TrimSpace(*p.RepoHost))
+			if h == "auto" {
+				h = ""
+			}
+			if h != "" {
+				if err := checkOneOf("repository host", h, RepoHosts); err != nil {
+					return err
+				}
+			}
+			pr.RepoHost = h
+			changes = append(changes, "repo_host")
+		}
+		for _, f := range []struct {
+			in   *string
+			out  *string
+			name string
+			need string
+		}{{p.RepoFileURL, &pr.RepoFileURL, "file address pattern", "{path}"}, {p.RepoCommitURL, &pr.RepoCommitURL, "commit address pattern", "{sha}"}} {
+			if f.in == nil {
+				continue
+			}
+			v := strings.TrimSpace(*f.in)
+			if v != "" && !strings.HasPrefix(v, "https://") && !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "{repo}") {
+				return invalid("the %s must start with http(s):// or {repo}", f.name)
+			}
+			if v != "" && !strings.Contains(v, f.need) {
+				return invalid("the %s needs %s", f.name, f.need)
+			}
+			*f.out = v
+			changes = append(changes, f.name)
+		}
+		if pr.RepoHost == "custom" && pr.RepoFileURL == "" && pr.RepoCommitURL == "" {
+			return invalid("custom links need a file or commit address pattern")
+		}
 		gate := 0
 		if pr.PlanGate {
 			gate = 1
 		}
-		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, release_mode=?, release_weeks=?, repo_url=?, updated_at=? WHERE id=?`,
-			pr.Name, pr.Description, gate, pr.ReleaseMode, pr.ReleaseWeeks, pr.RepoURL, now(), pr.ID); err != nil {
+		if _, err := t.Exec(`UPDATE projects SET name=?, description=?, plan_gate=?, release_mode=?, release_weeks=?, repo_url=?, repo_host=?, repo_file_url=?, repo_commit_url=?, updated_at=? WHERE id=?`,
+			pr.Name, pr.Description, gate, pr.ReleaseMode, pr.ReleaseWeeks, pr.RepoURL, pr.RepoHost, pr.RepoFileURL, pr.RepoCommitURL, now(), pr.ID); err != nil {
 			return err
 		}
 		return t.log(pr.ID, pr.Key, pr.Key, "project.updated", strings.Join(changes, ", "))

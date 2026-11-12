@@ -49,6 +49,13 @@ func TestLookupCommits(t *testing.T) {
 	if len(all[0].Items) != 2 {
 		t.Fatalf("all projects %+v", all[0].Items)
 	}
+	// GitLab: the merge request number is in the merge commit's body.
+	g := must(s.CreateItem("me", "API", ItemInput{Title: "gitlab mr"}))
+	must(s.UpdateItem("me", g.Ref, ItemPatch{PRURL: ptr("https://gitlab.example.com/team/api/-/merge_requests/12")}))
+	gl := must(s.LookupCommits("API", []CommitQuery{{SHA: other, Message: "Merge branch 'feature' into 'main'\n\nAdd it\n\nSee merge request team/api!12"}}))
+	if gl[0].Via != "pr" || len(gl[0].Items) != 1 || gl[0].Items[0].Ref != g.Ref {
+		t.Fatalf("gitlab %+v", gl[0])
+	}
 	if _, err := s.LookupCommits("API", []CommitQuery{{SHA: "nope"}}); err == nil {
 		t.Fatal("bad sha accepted")
 	}

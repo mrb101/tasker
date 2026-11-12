@@ -35,11 +35,17 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
   branch (e.g. a batch of small review fixes via `item bulk --branch fix/batch`); the UI shows it.
 - The server never runs git. It records branch names and tells the agent the base branch.
 - What a story changed: `tasker finish`, run in the story's worktree, has the CLI read git and record the branch's
-  files and commits since its base. The story page lists them (linked when the project has a repository address
-  in Settings), cards show `+120 −30`, and `tasker item changes [--record]` shows or re-measures them.
+  files and commits since its base. The story page lists them, cards show `+120 −30`, and
+  `tasker item changes [--record]` shows or re-measures them.
+- None of this needs a git host: it works the same for a repository on GitHub, on GitLab, on a server of yours
+  or only on your machine, and the server never contacts a host. A pull/merge request link on a story is
+  optional. For links to files and commits, give the project its repository's web address and link style in
+  Settings (GitHub, GitLab, Gitea/Forgejo, Bitbucket, or your own patterns for cgit/gitweb); leave it empty for
+  plain git.
   For stories finished before that, run `tasker backfill -p API` in the repository: it finds each story's
-  changes in the git history (its branch, the merge or squash commit of its PR, or commits naming it), shows
-  what it found, and saves it with `--apply`. `--gh` also asks GitHub about the story's pull request.
+  changes in the git history (its branch, the merge or squash commit of its pull/merge request, or commits naming
+  it), shows what it found, and saves it with `--apply`. For GitHub projects, `--gh` also asks GitHub about the
+  story's pull request.
 - Code locations: an item can point at places in the code (`tasker add … --at internal/auth/login.go:40-58`,
   `locations:` in `item bulk`). Run inside the repository, the CLI pins each one to the current commit and
   keeps the lines as a snippet, so a review finding still reads right after the code moves. For items written

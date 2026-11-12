@@ -61,6 +61,13 @@ func historyRepo(t *testing.T) {
 	// API-3: squash-merged as PR #7
 	commit("three/a.go", "Add the thing (#7)")
 
+	// API-8: a GitLab merge request, merged with a merge commit; the branch was deleted
+	run("switch", "-q", "-c", "feature-x")
+	commit("eight/a.go", "work")
+	run("switch", "-q", "main")
+	run("merge", "-q", "--no-ff", "-m", "Merge branch 'feature-x' into 'main'\n\nAdd x\n\nSee merge request team/api!12", "feature-x")
+	run("branch", "-q", "-D", "feature-x")
+
 	// API-4: committed straight to main, naming the story (and API-40 must not count)
 	commit("four/a.go", "API-4: first")
 	commit("four/b.go", "fix typo\n\nRefs api-4")
@@ -100,6 +107,7 @@ func TestBackfillFindsChanges(t *testing.T) {
 		{store.Item{Ref: "API-4"}, "2 commit(s) naming API-4", []string{"four/a.go", "four/b.go"}, 2},
 		{store.Item{Ref: "API-7", Branch: "api-7-ff"}, "1 commit(s) naming API-7", []string{"seven/a.go"}, 1},
 		{store.Item{Ref: "API-5", Branch: "api-5-c"}, "open branch", []string{"five/a.go"}, 1},
+		{store.Item{Ref: "API-8", Branch: "api-8-gone", PRURL: "https://gitlab.example.com/team/api/-/merge_requests/12"}, "merge commit", []string{"eight/a.go"}, 1},
 	} {
 		c, via, err := tr.findChanges(&tc.it, false)
 		if err != nil || c == nil {

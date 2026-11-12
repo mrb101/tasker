@@ -93,6 +93,12 @@ func prNumber(url string) string {
 	return ""
 }
 
+// prMentionRe finds a pull or merge request number in a commit message: GitHub's
+// "(#12)" and "Merge pull request #12", GitLab's "See merge request group/repo!12".
+func prMentionRe(n string) *regexp.Regexp {
+	return regexp.MustCompile(`\(#` + n + `\)|pull request #` + n + `\b|merge request \S*!` + n + `\b|(?:^|\s)!` + n + `\b`)
+}
+
 // refRe matches an item ref as a whole word: API-12 but not API-123 or XAPI-12.
 func refRe(ref string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(^|[^A-Za-z0-9])` + regexp.QuoteMeta(ref) + `($|[^0-9])`)
@@ -212,17 +218,18 @@ func (t *trunk) findChanges(it *store.Item, useGH bool) (*store.Changes, string,
 		}
 	}
 	if pr != "" {
-		tag := "(#" + pr + ")"
+		mentions := prMentionRe(pr)
 		for i := range t.commits {
 			m := &t.commits[i]
-			if len(m.Parents) < 2 && strings.Contains(m.Subject, tag) {
-				c, err := commitsChanges([]trunkCommit{*m})
-				return c, "PR #" + pr + " commit " + shortSHA(m.SHA), err
+			if !mentions.MatchString(m.Message) {
+				continue
 			}
-			if len(m.Parents) >= 2 && strings.Contains(m.Subject, "pull request #"+pr+" ") {
+			if len(m.Parents) >= 2 { // a merge commit: GitHub's "Merge pull request #12", GitLab's "See merge request !12"
 				c, err := mergeChanges(m)
 				return c, "merge commit " + shortSHA(m.SHA), err
 			}
+			c, err := commitsChanges([]trunkCommit{*m}) // a squash commit
+			return c, "PR #" + pr + " commit " + shortSHA(m.SHA), err
 		}
 	}
 	re := refRe(it.Ref)

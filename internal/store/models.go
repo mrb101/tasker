@@ -65,17 +65,20 @@ func normStatus(s string) string {
 func isClosed(status string) bool { return status == "done" || status == "cancelled" }
 
 type Project struct {
-	ID           int64          `json:"-"`
-	Key          string         `json:"key"`
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	PlanGate     bool           `json:"plan_gate"`
-	ReleaseMode  string         `json:"release_mode"`  // date: ship on the date with what is done; scope: ship when the scope is done
-	ReleaseWeeks int            `json:"release_weeks"` // the rhythm of a date-mode project; 0 = no rhythm
-	RepoURL      string         `json:"repo_url"`      // e.g. https://github.com/you/repo; links files and commits
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
-	Counts       *ProjectCounts `json:"counts,omitempty"`
+	ID            int64          `json:"-"`
+	Key           string         `json:"key"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	PlanGate      bool           `json:"plan_gate"`
+	ReleaseMode   string         `json:"release_mode"`    // date: ship on the date with what is done; scope: ship when the scope is done
+	ReleaseWeeks  int            `json:"release_weeks"`   // the rhythm of a date-mode project; 0 = no rhythm
+	RepoURL       string         `json:"repo_url"`        // web address of the repository; "" = no links (e.g. a private git server)
+	RepoHost      string         `json:"repo_host"`       // address style: github|gitlab|gitea|bitbucket|custom; "" = guess from repo_url
+	RepoFileURL   string         `json:"repo_file_url"`   // custom: {sha} {path} {line}
+	RepoCommitURL string         `json:"repo_commit_url"` // custom: {sha}
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
+	Counts        *ProjectCounts `json:"counts,omitempty"`
 }
 
 type ProjectCounts struct {

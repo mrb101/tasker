@@ -58,15 +58,19 @@ func (a *app) projectCmd() *cobra.Command {
 					fmt.Fprintln(a.out, p.Description)
 				}
 				c := p.Counts
-				if p.RepoURL != "" {
-					fmt.Fprintf(a.out, "repo: %s\n", p.RepoURL)
+				if p.RepoURL != "" || p.RepoHost == "custom" {
+					style := p.LinkHost()
+					if style == "" {
+						style = "unknown host: no links until --repo-host is set"
+					}
+					fmt.Fprintf(a.out, "repo: %s (%s links)\n", p.RepoURL, style)
 				}
 				fmt.Fprintf(a.out, "plan gate: %v\ntriage %d · queued %d · active %d · review %d · done %d\nqueues %d · open epics %d · docs to review %d\n",
 					p.PlanGate, c.Inbox, c.Queued, c.Active, c.Review, c.Done, c.Queues, c.Epics, c.DocsInReview)
 			})
 		},
 	})
-	var name, pdesc, gate, relMode, repoURL string
+	var name, pdesc, gate, relMode, repoURL, repoHost, repoFileURL, repoCommitURL string
 	var relWeeks int
 	set := &cobra.Command{
 		Use: "set KEY", Short: "Change project settings", Args: cobra.ExactArgs(1),
@@ -90,6 +94,15 @@ func (a *app) projectCmd() *cobra.Command {
 			if cmd.Flags().Changed("repo-url") {
 				patch["repo_url"] = repoURL
 			}
+			if cmd.Flags().Changed("repo-host") {
+				patch["repo_host"] = repoHost
+			}
+			if cmd.Flags().Changed("repo-file-url") {
+				patch["repo_file_url"] = repoFileURL
+			}
+			if cmd.Flags().Changed("repo-commit-url") {
+				patch["repo_commit_url"] = repoCommitURL
+			}
 			return call(a, "PATCH", "/api/projects/"+esc(args[0]), patch, func(p *store.Project) {
 				fmt.Fprintf(a.out, "updated %s (plan gate: %v)\n", p.Key, p.PlanGate)
 			})
@@ -98,7 +111,10 @@ func (a *app) projectCmd() *cobra.Command {
 	set.Flags().StringVar(&name, "name", "", "name")
 	set.Flags().StringVarP(&pdesc, "description", "d", "", "description")
 	set.Flags().StringVar(&gate, "plan-gate", "", "on|off: require an approved plan before items can start")
-	set.Flags().StringVar(&repoURL, "repo-url", "", "repository web address, e.g. https://github.com/you/repo (links files and commits)")
+	set.Flags().StringVar(&repoURL, "repo-url", "", "repository web address, for links to files and commits ('' = no links, e.g. plain git)")
+	set.Flags().StringVar(&repoHost, "repo-host", "", "link style: auto|github|gitlab|gitea|bitbucket|custom (default: guessed from --repo-url)")
+	set.Flags().StringVar(&repoFileURL, "repo-file-url", "", "custom file link pattern with {repo} {sha} {path} {line}")
+	set.Flags().StringVar(&repoCommitURL, "repo-commit-url", "", "custom commit link pattern with {repo} {sha}")
 	set.Flags().StringVar(&relMode, "release-mode", "", "date: ship on the date with what is done; scope: ship when the stories are done")
 	set.Flags().IntVar(&relWeeks, "release-weeks", 0, "release rhythm in weeks for date mode (0 = none)")
 	cmd.AddCommand(set)

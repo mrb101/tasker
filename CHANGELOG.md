@@ -29,8 +29,11 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
 - `tasker why FILE[:LINE[-END]]` (and MCP `tasker_lookup_commits`): from lines of code (git blame) or a file's
   history to the stories that made them, with their plans, decisions and reviews. Commits are matched by the
   commits recorded for stories, item refs in messages, PR numbers in squash commits, or merged branch names.
-- A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
-  and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
+- A project's repository address and link style (Settings, or `tasker project set KEY --repo-url … --repo-host …`)
+  link files and commits on GitHub, GitLab (also on its own domain), Gitea/Forgejo/Codeberg, Bitbucket, or
+  through your own address patterns (cgit, gitweb). Without one — plain git on a machine — there are no links
+  and everything else works the same. GitLab merge requests ("See merge request group/repo!12") are matched
+  like pull requests.
 
 ## [0.1.0] - 2026-11-12
 

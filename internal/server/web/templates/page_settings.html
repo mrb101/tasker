@@ -6,8 +6,25 @@
     <label>Key <input value="{{$p.Key}}" disabled></label>
     <label>Name <input name="name" value="{{$p.Name}}"></label>
     <label class="span2">Description <input name="description" value="{{$p.Description}}"></label>
-    <label class="span2">Repository <input name="repo_url" value="{{$p.RepoURL}}" placeholder="https://github.com/you/repo" class="mono"></label>
-    <p class="span2 muted small">Links the files and commits that stories changed. Works with GitHub, Gitea, Forgejo and other hosts with GitHub-style <code>/blob/</code> and <code>/commit/</code> addresses.</p>
+    <label>Repository web address <input name="repo_url" value="{{$p.RepoURL}}" placeholder="https://gitlab.example.com/team/repo" class="mono"></label>
+    <label>Links in the style of <select name="repo_host">
+      <option value="auto" {{if eq $p.RepoHost ""}}selected{{end}}>guess from the address{{with $p.LinkHost}}{{if eq $p.RepoHost ""}} ({{.}}){{end}}{{end}}</option>
+      <option value="github" {{if eq $p.RepoHost "github"}}selected{{end}}>GitHub</option>
+      <option value="gitlab" {{if eq $p.RepoHost "gitlab"}}selected{{end}}>GitLab</option>
+      <option value="gitea" {{if eq $p.RepoHost "gitea"}}selected{{end}}>Gitea / Forgejo / Codeberg</option>
+      <option value="bitbucket" {{if eq $p.RepoHost "bitbucket"}}selected{{end}}>Bitbucket</option>
+      <option value="custom" {{if eq $p.RepoHost "custom"}}selected{{end}}>my own patterns (below)</option>
+    </select></label>
+    <p class="span2 muted small">Links the files and commits stories changed and the code their findings point at. tasker only builds the
+      addresses; it never contacts the host. For a repository with no web view (plain git on a machine of yours) leave the address empty.
+      {{if and $p.RepoURL (not $p.LinkHost)}}<b>tasker can't tell what kind of host this is — choose a style to get links.</b>{{end}}</p>
+    <details class="span2 small" {{if eq $p.RepoHost "custom"}}open{{end}}><summary>My own patterns (cgit, gitweb, …)</summary>
+      <div class="form-grid">
+        <label class="span2">File <input name="repo_file_url" value="{{$p.RepoFileURL}}" class="mono" placeholder="https://git.example.com/cgit/repo/tree/{path}?id={sha}#n{line}"></label>
+        <label class="span2">Commit <input name="repo_commit_url" value="{{$p.RepoCommitURL}}" class="mono" placeholder="https://git.example.com/cgit/repo/commit/?id={sha}"></label>
+        <p class="span2 muted">Placeholders: <code>{repo}</code> the address above, <code>{sha}</code>, <code>{path}</code>, <code>{line}</code>.</p>
+      </div>
+    </details>
     <label class="check span2"><input type="checkbox" name="plan_gate" {{if $p.PlanGate}}checked{{end}}>
       <span><b>Plan gate</b>: an item can only be started when it (or its epic) has an <em>approved</em> plan document.</span></label>
     <div class="span2 row end"><button class="btn primary">Save</button></div>

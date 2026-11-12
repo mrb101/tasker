@@ -29,7 +29,7 @@
 </article>
 {{end}}
 
-{{define "sha"}}{{if .Repo}}<a class="sha mono" href="{{.Repo}}/commit/{{.SHA}}" target="_blank" rel="noopener" title="{{.SHA}}">{{shortSHA .SHA}}</a>{{else}}<code class="sha" title="{{.SHA}}">{{shortSHA .SHA}}</code>{{end}}{{end}}
+{{define "sha"}}{{with .P.CommitURL .SHA}}<a class="sha mono" href="{{.}}" target="_blank" rel="noopener">{{end}}<code class="sha" title="{{.SHA}}">{{shortSHA .SHA}}</code>{{if .P.CommitURL .SHA}}</a>{{end}}{{end}}
 
 {{define "itemrow"}}
 <tr>

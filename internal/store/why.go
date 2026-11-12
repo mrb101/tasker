@@ -13,7 +13,8 @@ import (
 // A commit is matched, in order, by:
 //   commit     its id was recorded for an item (tasker finish, backfill)
 //   ref        its message names an item (API-12) — survives squash merges
-//   pr         its subject carries a pull request number, "(#41)" or "pull request #41"
+//   pr         it carries a pull or merge request number: "(#41)", "pull request #41", "!41",
+//              or GitLab's "See merge request group/repo!41"
 //   branch     it merges an item's branch ("Merge branch 'api-12-…'", "from you/api-12-…")
 
 const maxLookupCommits = 500
@@ -45,7 +46,8 @@ type CommitMatch struct {
 
 var (
 	refInTextRe = regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])([A-Za-z][A-Za-z0-9]{1,9})-(\d+)(?:$|[^0-9])`)
-	prInTextRe  = regexp.MustCompile(`\(#(\d+)\)|pull request #(\d+)|!(\d+)\b`)
+	prInTextRe  = regexp.MustCompile(`\(#(\d+)\)|pull request #(\d+)|!(\d+)\b`) // in the subject
+	mrInBodyRe  = regexp.MustCompile(`See merge request \S*!(\d+)`)             // GitLab merge commits
 	mergeFromRe = regexp.MustCompile(`(?:Merge pull request #\d+ from [^/\s]+/|Merge branch '|Merge remote-tracking branch '[^/]+/)([^'\s]+)`)
 	prURLNumRe  = regexp.MustCompile(`/(?:pull|pulls|merge_requests)/(\d+)/?$`)
 )
@@ -177,8 +179,13 @@ func (s *Store) LookupCommits(project string, cs []CommitQuery) ([]CommitMatch, 
 		}
 		// 3. a pull request number in the subject
 		if len(m.Items) == 0 {
+			num := ""
 			if p := prInTextRe.FindStringSubmatch(subject); p != nil {
-				num := p[1] + p[2] + p[3]
+				num = p[1] + p[2] + p[3]
+			} else if p := mrInBodyRe.FindStringSubmatch(c.Message); p != nil {
+				num = p[1]
+			}
+			if num != "" {
 				cands, err := ids(scope(`SELECT i.id FROM items i WHERE i.pr_url LIKE ?`), "%/"+num+"%")
 				if err != nil {
 					return nil, err

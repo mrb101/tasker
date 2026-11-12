@@ -328,6 +328,9 @@ ALTER TABLE items ADD COLUMN stretch INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX items_release ON items(release_id);
 `, `
 ALTER TABLE projects ADD COLUMN repo_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE projects ADD COLUMN repo_host TEXT NOT NULL DEFAULT '';
+ALTER TABLE projects ADD COLUMN repo_file_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE projects ADD COLUMN repo_commit_url TEXT NOT NULL DEFAULT '';
 CREATE TABLE item_files (
 	item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
 	path TEXT NOT NULL,

@@ -28,8 +28,8 @@
       <div class="panel locations">
         {{range $it.Locations}}
         <div class="loc">
-          <div class="row small"><span class="mono">{{if $p.RepoURL}}<a href="{{$p.RepoURL}}/blob/{{or .SHA "HEAD"}}/{{.Path}}{{if .Line}}#L{{.Line}}{{if .EndLine}}-L{{.EndLine}}{{end}}{{end}}" target="_blank" rel="noopener">{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}</a>{{else}}{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}{{end}}</span>
-            {{if .SHA}}<span class="muted">at {{template "sha" (dict "SHA" .SHA "Repo" $p.RepoURL)}}</span>{{end}}</div>
+          <div class="row small"><span class="mono">{{with $p.FileURL .SHA .Path .Line .EndLine}}<a href="{{.}}" target="_blank" rel="noopener">{{end}}{{.Path}}{{if .Line}}:{{.Line}}{{if .EndLine}}-{{.EndLine}}{{end}}{{end}}{{if $p.FileURL .SHA .Path .Line .EndLine}}</a>{{end}}</span>
+            {{if .SHA}}<span class="muted">at {{template "sha" (dict "SHA" .SHA "P" $p)}}</span>{{end}}</div>
           {{if .Snippet}}<pre class="snippet"><code>{{.Snippet}}</code></pre>{{end}}
         </div>
         {{end}}
@@ -42,7 +42,7 @@
         <div class="row small">
           <span><b>{{.FileCount}}</b> file{{if ne .FileCount 1}}s{{end}}</span>
           <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span>
-          <span class="muted">· {{len .Commits}} commit{{if ne (len .Commits) 1}}s{{end}}{{if .Base}} since <code>{{.Base}}</code>{{end}}{{if .HeadSHA}} at {{template "sha" (dict "SHA" .HeadSHA "Repo" $p.RepoURL)}}{{end}}</span>
+          <span class="muted">· {{len .Commits}} commit{{if ne (len .Commits) 1}}s{{end}}{{if .Base}} since <code>{{.Base}}</code>{{end}}{{if .HeadSHA}} at {{template "sha" (dict "SHA" .HeadSHA "P" $p)}}{{end}}</span>
           <span class="grow"></span>
           {{if .RecordedAt}}<span class="muted">{{if and .Via (ne .Via "finish") (ne .Via "record")}}{{.Via}} · {{end}}recorded {{ago .RecordedAt}}</span>{{end}}
         </div>
@@ -52,7 +52,7 @@
           {{$head := .HeadSHA}}
           {{range .Files}}
             <tr><td class="nowrap num">{{if .Binary}}<span class="muted">bin</span>{{else}}<span class="add">+{{.Added}}</span> <span class="del">−{{.Deleted}}</span>{{end}}</td>
-            <td class="w100 mono">{{if .OldPath}}<span class="muted">{{.OldPath}} →</span> {{end}}{{if and $p.RepoURL $head}}<a href="{{$p.RepoURL}}/blob/{{$head}}/{{.Path}}" target="_blank" rel="noopener">{{.Path}}</a>{{else}}{{.Path}}{{end}}</td></tr>
+            <td class="w100 mono">{{if .OldPath}}<span class="muted">{{.OldPath}} →</span> {{end}}{{with $p.FileURL $head .Path 0 0}}<a href="{{.}}" target="_blank" rel="noopener">{{end}}{{.Path}}{{if $p.FileURL $head .Path 0 0}}</a>{{end}}</td></tr>
           {{end}}
           </tbody>
         </table>
@@ -61,7 +61,7 @@
         {{if .Commits}}
         <details class="small commits">
           <summary>Commits</summary>
-          {{range .Commits}}<div class="commit">{{template "sha" (dict "SHA" .SHA "Repo" $p.RepoURL)}} <span class="ellipsis">{{.Subject}}</span></div>{{end}}
+          {{range .Commits}}<div class="commit">{{template "sha" (dict "SHA" .SHA "P" $p)}} <span class="ellipsis">{{.Subject}}</span></div>{{end}}
         </details>
         {{end}}
       </div>
