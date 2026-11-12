@@ -30,14 +30,14 @@ type trunk struct {
 	ref     string
 	commits []trunkCommit // newest first
 	index   map[string]int
+	nested  []trunkCommit // merges that reached it inside another branch; loaded when first needed
+	loaded  bool
 }
 
-func loadTrunk(ref string) (*trunk, error) {
-	out, err := git("log", "--first-parent", "--format=%H%x1f%P%x1f%aI%x1f%B%x1e", ref)
-	if err != nil {
-		return nil, err
-	}
-	t := &trunk{ref: ref, index: map[string]int{}}
+const commitFormat = "--format=%H%x1f%P%x1f%aI%x1f%B%x1e"
+
+func parseCommits(out string) []trunkCommit {
+	var cs []trunkCommit
 	for _, rec := range strings.Split(out, "\x1e") {
 		rec = strings.TrimLeft(rec, "\n")
 		p := strings.SplitN(rec, "\x1f", 4)
@@ -46,10 +46,48 @@ func loadTrunk(ref string) (*trunk, error) {
 		}
 		msg := strings.TrimSpace(p[3])
 		subject, _, _ := strings.Cut(msg, "\n")
-		t.index[p[0]] = len(t.commits)
-		t.commits = append(t.commits, trunkCommit{SHA: p[0], Parents: strings.Fields(p[1]), Subject: subject, Message: msg, AuthoredAt: p[2]})
+		cs = append(cs, trunkCommit{SHA: p[0], Parents: strings.Fields(p[1]), Subject: subject, Message: msg, AuthoredAt: p[2]})
+	}
+	return cs
+}
+
+func loadTrunk(ref string) (*trunk, error) {
+	out, err := git("log", "--first-parent", commitFormat, ref)
+	if err != nil {
+		return nil, err
+	}
+	t := &trunk{ref: ref, index: map[string]int{}}
+	t.commits = parseCommits(out)
+	for i, c := range t.commits {
+		t.index[c.SHA] = i
 	}
 	return t, nil
+}
+
+// nestedMerges are the merges in the trunk's history that are not on its
+// first-parent line: a story merged into a lane branch ("Merge: … (COS-293)"
+// into distribution), which later reached the trunk in one merge. Merges that
+// brought the trunk itself into a branch ("Merge branch 'main' into feat/…")
+// are left out: their second parent is a trunk commit.
+func (t *trunk) nestedMerges() ([]trunkCommit, error) {
+	if t.loaded {
+		return t.nested, nil
+	}
+	out, err := git("log", "--merges", commitFormat, t.ref)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range parseCommits(out) {
+		if _, onTrunk := t.index[m.SHA]; onTrunk || len(m.Parents) < 2 {
+			continue
+		}
+		if _, sync := t.index[m.Parents[1]]; sync {
+			continue
+		}
+		t.nested = append(t.nested, m)
+	}
+	t.loaded = true
+	return t.nested, nil
 }
 
 // resolveTrunk picks the branch whose history to search: the local branch or
@@ -252,12 +290,27 @@ func (t *trunk) findChanges(it *store.Item, useGH bool) (*store.Changes, string,
 	// "Merge branch 'api-12-…'"): each brought in the story's branch. A story
 	// merged more than once (a follow-up fix) adds them up.
 	re := refRe(it.Ref)
+	names := func(m *trunkCommit) bool {
+		return len(m.Parents) >= 2 && (re.MatchString(m.Subject) || (it.Branch != "" && branchMentioned(m.Message, it.Branch)))
+	}
 	var merges []*trunkCommit
 	for i := range t.commits {
-		m := &t.commits[i]
-		if len(m.Parents) >= 2 && (re.MatchString(m.Subject) || (it.Branch != "" && branchMentioned(m.Message, it.Branch))) {
-			merges = append(merges, m)
+		if names(&t.commits[i]) {
+			merges = append(merges, &t.commits[i])
 		}
+	}
+	nested := false
+	if len(merges) == 0 { // not merged into the trunk directly: perhaps into a lane that was
+		ns, err := t.nestedMerges()
+		if err != nil {
+			return nil, "", err
+		}
+		for i := range ns {
+			if names(&ns[i]) {
+				merges = append(merges, &ns[i])
+			}
+		}
+		nested = len(merges) > 0
 	}
 	if len(merges) > 0 {
 		var parts []*store.Changes
@@ -271,6 +324,9 @@ func (t *trunk) findChanges(it *store.Item, useGH bool) (*store.Changes, string,
 		via := "merge commit " + shortSHA(merges[0].SHA)
 		if len(merges) > 1 {
 			via = fmt.Sprintf("%d merge commits", len(merges))
+		}
+		if nested {
+			via += " (via a branch)"
 		}
 		return unionChanges(parts), via, nil
 	}

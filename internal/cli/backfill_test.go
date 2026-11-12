@@ -89,6 +89,26 @@ func historyRepo(t *testing.T) {
 	run("branch", "-q", "-D", "nine-work")
 	commit("HANDOFF.md", "docs: record API-9 as merged in the handoff")
 
+	// A lane: API-10 and API-12 are merged into it, and the lane into main in one
+	// merge that names neither. API-12's branch also took main in on the way
+	// ("Merge branch 'main' into api-12-work"): that merge is not API-12's work.
+	run("switch", "-q", "-c", "lane")
+	run("switch", "-q", "-c", "api-10-ten")
+	commit("ten/a.go", "ten")
+	run("switch", "-q", "lane")
+	run("merge", "-q", "--no-ff", "-m", "Merge: ten (API-10)", "api-10-ten")
+	run("switch", "-q", "-c", "api-12-work")
+	commit("twelve/a.go", "twelve")
+	run("switch", "-q", "main")
+	commit("README", "main moves on")
+	run("switch", "-q", "api-12-work")
+	run("merge", "-q", "--no-ff", "-m", "Merge branch 'main' into api-12-work", "main")
+	run("switch", "-q", "lane")
+	run("merge", "-q", "--no-ff", "-m", "Merge: twelve (API-12)", "api-12-work")
+	run("switch", "-q", "main")
+	run("merge", "-q", "--no-ff", "-m", "Merge branch 'lane'", "lane")
+	run("branch", "-q", "-D", "lane", "api-10-ten", "api-12-work")
+
 	// API-5: an open branch, not merged
 	run("switch", "-q", "-c", "api-5-c")
 	commit("five/a.go", "wip")
@@ -119,6 +139,10 @@ func TestBackfillFindsChanges(t *testing.T) {
 		{store.Item{Ref: "API-5", Branch: "api-5-c"}, "open branch", []string{"five/a.go"}, 1},
 		{store.Item{Ref: "API-9", Branch: "api-9-nine"}, "merge commit", []string{"nine/a.go", "nine/b.go"}, 2},
 		{store.Item{Ref: "API-8", Branch: "api-8-gone", PRURL: "https://gitlab.example.com/team/api/-/merge_requests/12"}, "merge commit", []string{"eight/a.go"}, 1},
+		{store.Item{Ref: "API-10", Branch: "api-10-gone"}, "merge commit", []string{"ten/a.go"}, 1},
+		// one merge (the lane's), not two: the sync merge from main is left out. The lane's
+		// merge also brought README, which main had moved on with: that is what it merged.
+		{store.Item{Ref: "API-12"}, "merge commit", []string{"README", "twelve/a.go"}, 3},
 	} {
 		c, via, err := tr.findChanges(&tc.it, false)
 		if err != nil || c == nil {
