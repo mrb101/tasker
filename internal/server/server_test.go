@@ -203,7 +203,7 @@ func TestAPIFlowAndPages(t *testing.T) {
 		if res.StatusCode != 200 {
 			t.Fatalf("%s: %d\n%s", p, res.StatusCode, body)
 		}
-		if p == "/live?wall=1" && (!strings.Contains(string(body), `class="wall" data-wall data-live`) || !strings.Contains(string(body), `href="/i/API-1"`)) {
+		if p == "/live?wall=1" && (!strings.Contains(string(body), `class="wall" data-wall data-live`) || !strings.Contains(string(body), `href="/i/API-1" data-ref="API-1"`)) {
 			t.Fatal("wall mode does not show the work in progress")
 		}
 		if p == "/i/API-1" {

@@ -19,7 +19,7 @@
 
   <section class="live-now" aria-label="In progress">
     {{range $v.Now}}
-    <a class="livecard st-{{.Status}}" href="/i/{{.Ref}}">
+    <a class="livecard st-{{.Status}}" href="/i/{{.Ref}}" data-ref="{{.Ref}}">
       <div class="lc-top">
         <span class="lc-state" title="{{.Status}}">{{if eq .Status "active"}}in progress{{else}}in review{{end}}</span>
         <span class="grow"></span>
@@ -48,7 +48,7 @@
     <li class="ev ev-{{.Kind}}">
       <time data-local="time" datetime="{{.CreatedAt}}">{{date .CreatedAt}}</time>
       <span class="ev-ic" aria-hidden="true">{{if eq .Kind "done"}}✔{{else if eq .Kind "started"}}▶{{else if eq .Kind "review"}}◐{{else if eq .Kind "overlap"}}⚠{{else if eq .Kind "plan"}}✎{{else if eq .Kind "approved"}}✓{{else if eq .Kind "changes"}}↺{{else if eq .Kind "shipped"}}⚑{{else}}✕{{end}}</span>
-      <a class="ref" href="/r/{{.Ref}}">{{.Ref}}</a>
+      <a class="ref" href="/r/{{.Ref}}"{{if or (eq .Kind "done") (eq .Kind "started") (eq .Kind "review") (eq .Kind "overlap") (eq .Kind "cancelled")}} data-ref="{{.Ref}}"{{end}}>{{.Ref}}</a>
       <span class="ev-what">{{if eq .Kind "done"}}done{{else if eq .Kind "started"}}started{{else if eq .Kind "review"}}to review{{else if eq .Kind "overlap"}}overlaps{{else if eq .Kind "plan"}}submitted for review{{else if eq .Kind "approved"}}approved{{else if eq .Kind "changes"}}changes requested{{else if eq .Kind "shipped"}}shipped{{else}}cancelled{{end}}</span>
       <span class="ev-title ellipsis" {{if eq .Kind "overlap"}}title="{{.Detail}}"{{end}}>{{.Title}}</span>
       {{if and (eq .Kind "done") .Files}}<span class="chip diff">{{.Files}} file{{if ne .Files 1}}s{{end}} <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span></span>{{end}}

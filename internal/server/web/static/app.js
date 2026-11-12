@@ -212,6 +212,16 @@
       if (dep && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey)) { e.preventDefault(); openPeek(dep.dataset.peekRef); }
       return;
     }
+    // Live page: its cards and the stories in its feed open in the quick view too;
+    // ← and → step through the cards (or the feed's stories) around it.
+    const live = e.target.closest('#main .livecard[data-ref], #main .live-feed a[data-ref]');
+    if (live && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
+      e.preventDefault();
+      const scope = live.closest('.live-now, .live-feed');
+      const refs = [...new Set([...scope.querySelectorAll('[data-ref]')].map((el) => el.dataset.ref))];
+      openPeek(live.dataset.ref, refs);
+      return;
+    }
     const card = e.target.closest('#main .card');
     if (!card || e.target.closest('.sel') || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = e.target.closest('a');
