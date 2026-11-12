@@ -18,7 +18,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   otherwise). `--gh` asks GitHub as a last resort. Each story says how its changes were found.
 - Items can point at places in the code: `--at path:12-20` on `tasker add` and `item update`, `locations:` in
   `item bulk` and MCP. The CLI pins each to the current commit with the lines as a snippet; the item page shows
-  them, linked to the exact lines when the project has a repository address.
+  them, linked to the exact lines when the project has a repository address. `tasker backfill --locations`
+  suggests locations for older items from the files their text names.
 - A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
   and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrb101/tasker/internal/store"
 )
@@ -138,5 +139,38 @@ func TestPRNumberAndRefMatching(t *testing.T) {
 	}
 	if !branchMentioned("Merge pull request #2 from me/api-2-b", "api-2-b") || branchMentioned("Merge branch 'api-2-bb'", "api-2-b") {
 		t.Error("branch mention")
+	}
+}
+
+func TestMentionedLocations(t *testing.T) {
+	rf := &repoFiles{full: map[string]bool{}, base: map[string][]string{}}
+	for _, p := range []string{"internal/store/items.go", "internal/server/api.go", "web/api.go", "README.md", "cmd/tasker/main.go"} {
+		rf.full[p] = true
+		rf.base[filepathBase(p)] = append(rf.base[filepathBase(p)], p)
+	}
+	text := "The query in `internal/store/items.go:120-134` is built by hand (see also store/items.go).\n" +
+		"main.go#L3-L9 and README.md. api.go is ambiguous; https://example.com/api.go is a URL;\n" +
+		"items.go:120-134 again; nothing.go:4 does not exist; version 1.2 is not a file; main.go:7:2"
+	got := mentionedLocations(text, rf)
+	var names []string
+	for _, l := range got {
+		names = append(names, l.String())
+	}
+	want := "internal/store/items.go:120-134,cmd/tasker/main.go:3-9,README.md,cmd/tasker/main.go:7"
+	if strings.Join(names, ",") != want {
+		t.Fatalf("got  %s\nwant %s", strings.Join(names, ","), want)
+	}
+}
+
+func filepathBase(p string) string { return p[strings.LastIndex(p, "/")+1:] }
+
+func TestCommitAt(t *testing.T) {
+	historyRepo(t)
+	if sha := commitAt("main", "2000-01-01T00:00:00Z"); sha != "" {
+		t.Fatalf("before history: %q", sha)
+	}
+	head, _ := git("rev-parse", "main")
+	if sha := commitAt("main", time.Now().Add(time.Hour).UTC().Format(time.RFC3339)); sha != head {
+		t.Fatalf("now: %q", sha)
 	}
 }

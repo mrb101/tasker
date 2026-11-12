@@ -286,7 +286,7 @@ func ghChanges(pr string) (*store.Changes, error) {
 }
 
 func (a *app) backfillCmd() *cobra.Command {
-	var apply, redo, useGH bool
+	var apply, redo, useGH, locations bool
 	var base string
 	var statuses []string
 	cmd := &cobra.Command{
@@ -302,11 +302,20 @@ tasker recorded changes did, and with --apply records it. For each story it trie
   5. with --gh: the pull request on GitHub, through the gh CLI
 
 Stories that already have changes are skipped (--redo includes them). Without REFs it looks at
-the project's stories in review or done.`,
-		RunE: func(_ *cobra.Command, args []string) error {
+the project's stories in review or done.
+
+--locations instead looks for places in the code that items name in their title or description
+("internal/store/items.go:120", "items.go#L12-L20", a path in backticks) and suggests them as the
+item's code locations, pinned to the commit that was current when the item was written. Mentions
+must resolve to a file in the repository; items that already have locations are left alone.
+Without REFs it looks at every item that is not cancelled.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			c := a.client()
 			if _, err := git("rev-parse", "--is-inside-work-tree"); err != nil {
 				return fmt.Errorf("run backfill inside the project's git repository")
+			}
+			if locations && !cmd.Flags().Changed("status") {
+				statuses = []string{"inbox", "queued", "active", "review", "done"}
 			}
 			var items []*store.Item
 			if len(args) > 0 {
@@ -329,6 +338,9 @@ the project's stories in review or done.`,
 				if err := c.Do("GET", "/api/projects/"+esc(p)+"/items"+q(kv...), nil, &items); err != nil {
 					return err
 				}
+			}
+			if locations {
+				return a.backfillLocations(items, base, apply)
 			}
 			trunks := map[string]*trunk{}
 			queueBase := map[string]string{}
@@ -422,6 +434,7 @@ the project's stories in review or done.`,
 	}
 	cmd.Flags().BoolVar(&apply, "apply", false, "save what was found (default: dry run)")
 	cmd.Flags().BoolVar(&redo, "redo", false, "include stories that already have changes")
+	cmd.Flags().BoolVar(&locations, "locations", false, "suggest code locations from the files items name in their text")
 	cmd.Flags().BoolVar(&useGH, "gh", false, "as a last resort, ask GitHub about the story's pull request (needs gh)")
 	cmd.Flags().StringVar(&base, "base", "", "branch whose history to search (default: each story's queue base, else origin/HEAD, main or master)")
 	cmd.Flags().StringSliceVarP(&statuses, "status", "s", []string{"review", "done"}, "which stories to look at")

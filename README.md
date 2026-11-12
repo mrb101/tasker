@@ -42,7 +42,8 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
   what it found, and saves it with `--apply`. `--gh` also asks GitHub about the story's pull request.
 - Code locations: an item can point at places in the code (`tasker add … --at internal/auth/login.go:40-58`,
   `locations:` in `item bulk`). Run inside the repository, the CLI pins each one to the current commit and
-  keeps the lines as a snippet, so a review finding still reads right after the code moves.
+  keeps the lines as a snippet, so a review finding still reads right after the code moves. For items written
+  before, `tasker backfill -p API --locations` turns the files they name in their text into locations.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
 
 ## Agent setup
