@@ -34,6 +34,7 @@ type Commit struct {
 type Changes struct {
 	Base       string        `json:"base,omitempty"`     // branch the diff was taken against
 	HeadSHA    string        `json:"head_sha,omitempty"` // commit the diff was taken at
+	Via        string        `json:"via,omitempty"`      // how it was found: finish, record, merge commit, PR #12 commit, …
 	Files      []ChangedFile `json:"files"`
 	Commits    []Commit      `json:"commits"`
 	Truncated  bool          `json:"truncated,omitempty"` // too many files to list; totals only
@@ -64,6 +65,10 @@ func cleanRepoPath(p string) (string, error) {
 // normalize validates in place and fills the totals.
 func (c *Changes) normalize() error {
 	c.Base = strings.TrimSpace(c.Base)
+	c.Via = strings.TrimSpace(c.Via)
+	if len(c.Via) > 80 {
+		return invalid("via is limited to 80 characters")
+	}
 	c.HeadSHA = strings.ToLower(strings.TrimSpace(c.HeadSHA))
 	if c.HeadSHA != "" && !shaRe.MatchString(c.HeadSHA) {
 		return invalid("head_sha %q is not a commit id", c.HeadSHA)
@@ -171,11 +176,14 @@ func (s *Store) recordChangesTx(t *txc, it *Item, c *Changes) error {
 			return err
 		}
 	}
-	if _, err := t.Exec(`UPDATE items SET head_sha = ?, base_ref = ? WHERE id = ?`, c.HeadSHA, c.Base, it.ID); err != nil {
+	if _, err := t.Exec(`UPDATE items SET head_sha = ?, base_ref = ?, changes_via = ? WHERE id = ?`, c.HeadSHA, c.Base, c.Via, it.ID); err != nil {
 		return err
 	}
-	return t.log(it.ProjectID, it.Project, it.Ref, "item.changes",
-		fmt.Sprintf("%d file(s) +%d −%d, %d commit(s)", c.FileCount, c.Added, c.Deleted, len(c.Commits)))
+	detail := fmt.Sprintf("%d file(s) +%d −%d, %d commit(s)", c.FileCount, c.Added, c.Deleted, len(c.Commits))
+	if c.Via != "" {
+		detail += " (" + c.Via + ")"
+	}
+	return t.log(it.ProjectID, it.Project, it.Ref, "item.changes", detail)
 }
 
 // RecordChanges replaces what an item's branch changed without touching its status.
@@ -196,7 +204,7 @@ func (s *Store) RecordChanges(actor, ref string, c Changes) (*Item, error) {
 // changes reads an item's recorded changes; nil when nothing was recorded.
 func (s *Store) changes(q querier, itemID int64) (*Changes, error) {
 	c := &Changes{Files: []ChangedFile{}, Commits: []Commit{}}
-	if err := q.QueryRow(`SELECT head_sha, base_ref FROM items WHERE id = ?`, itemID).Scan(&c.HeadSHA, &c.Base); err != nil {
+	if err := q.QueryRow(`SELECT head_sha, base_ref, changes_via FROM items WHERE id = ?`, itemID).Scan(&c.HeadSHA, &c.Base, &c.Via); err != nil {
 		return nil, err
 	}
 	rows, err := q.Query(`SELECT path, old_path, added, deleted, source, position, recorded_at FROM item_files

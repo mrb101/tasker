@@ -153,16 +153,22 @@ func collectChanges(base string) (*store.Changes, error) {
 	if c.Commits == nil {
 		c.Commits = []store.Commit{}
 	}
+	sumChanges(c)
+	return c, nil
+}
+
+// sumChanges fills the totals and trims a huge file list (the server keeps the totals).
+func sumChanges(c *store.Changes) {
+	c.Added, c.Deleted = 0, 0
 	for _, f := range c.Files {
 		c.Added += f.Added
 		c.Deleted += f.Deleted
 	}
 	c.FileCount = len(c.Files)
 	if len(c.Files) > cliMaxFiles {
-		c.Truncated = true // the server keeps the totals; only the first files are listed
+		c.Truncated = true
 		c.Files = c.Files[:cliMaxFiles]
 	}
-	return c, nil
 }
 
 // changesForItem gathers the changes of an item's branch in this worktree.
@@ -190,6 +196,9 @@ func changesSummary(c *store.Changes) string {
 	s := fmt.Sprintf("%d file(s) +%d −%d, %d commit(s)", c.FileCount, c.Added, c.Deleted, len(c.Commits))
 	if c.Base != "" {
 		s += " since " + c.Base
+	}
+	if c.Via != "" && c.Via != "finish" && c.Via != "record" {
+		s += " — " + c.Via
 	}
 	return s
 }

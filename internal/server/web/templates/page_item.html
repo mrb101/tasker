@@ -30,7 +30,7 @@
           <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span>
           <span class="muted">· {{len .Commits}} commit{{if ne (len .Commits) 1}}s{{end}}{{if .Base}} since <code>{{.Base}}</code>{{end}}{{if .HeadSHA}} at {{template "sha" (dict "SHA" .HeadSHA "Repo" $p.RepoURL)}}{{end}}</span>
           <span class="grow"></span>
-          {{if .RecordedAt}}<span class="muted">recorded {{ago .RecordedAt}}</span>{{end}}
+          {{if .RecordedAt}}<span class="muted">{{if and .Via (ne .Via "finish") (ne .Via "record")}}{{.Via}} · {{end}}recorded {{ago .RecordedAt}}</span>{{end}}
         </div>
         {{if .Files}}
         <table class="list files">

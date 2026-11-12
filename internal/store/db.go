@@ -355,6 +355,7 @@ CREATE TABLE item_commits (
 CREATE INDEX item_commits_sha ON item_commits(sha);
 ALTER TABLE items ADD COLUMN head_sha TEXT NOT NULL DEFAULT '';
 ALTER TABLE items ADD COLUMN base_ref TEXT NOT NULL DEFAULT '';
+ALTER TABLE items ADD COLUMN changes_via TEXT NOT NULL DEFAULT '';
 `}
 
 func (s *Store) migrate() error {

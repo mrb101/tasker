@@ -638,7 +638,9 @@ func (a *app) finishCmd() *cobra.Command {
 				in.Status = "done"
 			}
 			if !noChanges {
-				in.Changes = a.gatherChanges(it, base, haveBase, anyway)
+				if in.Changes = a.gatherChanges(it, base, haveBase, anyway); in.Changes != nil {
+					in.Changes.Via = "finish"
+				}
 			}
 			return call(a, "POST", "/api/items/"+esc(it.Ref)+"/finish", in, func(it *store.Item) {
 				fmt.Fprintf(a.out, "%s → %s\n", it.Ref, it.Status)
@@ -719,6 +721,7 @@ func (a *app) itemChangesCmd() *cobra.Command {
 			if ch == nil {
 				return &exitErr{ExitError, ""}
 			}
+			ch.Via = "record"
 			return call(a, "PUT", "/api/items/"+esc(it.Ref)+"/changes", ch, func(it *store.Item) {
 				fmt.Fprintf(a.out, "%s: recorded %s\n", it.Ref, changesSummary(ch))
 			})

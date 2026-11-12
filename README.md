@@ -37,6 +37,9 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
 - What a story changed: `tasker finish`, run in the story's worktree, has the CLI read git and record the branch's
   files and commits since its base. The story page lists them (linked when the project has a repository address
   in Settings), cards show `+120 −30`, and `tasker item changes [--record]` shows or re-measures them.
+  For stories finished before that, run `tasker backfill -p API` in the repository: it finds each story's
+  changes in the git history (its branch, the merge or squash commit of its PR, or commits naming it), shows
+  what it found, and saves it with `--apply`. `--gh` also asks GitHub about the story's pull request.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
 
 ## Agent setup

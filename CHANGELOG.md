@@ -13,6 +13,9 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   branch, or the story ahead of it in a stacked queue. The story page lists them, cards and the quick view show
   the totals, and `tasker item changes` prints them. `tasker item changes --record` measures again, e.g. after
   review fixes. The server still never runs git; MCP clients pass `changes` to `tasker_finish` themselves.
+- `tasker backfill` finds what earlier stories changed in the repository's history — their branch, the merge
+  or squash commit of their pull request, or commits that name them — and records it with `--apply` (a dry run
+  otherwise). `--gh` asks GitHub as a last resort. Each story says how its changes were found.
 - A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
   and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
 
