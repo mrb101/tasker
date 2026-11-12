@@ -139,6 +139,89 @@ func lineChart(width int, labels []string, ss []series, ariaLabel string) templa
 	return template.HTML(b.String())
 }
 
+// paceChart: stories done through the day, cumulative by hour. Today (series 1,
+// up to the current hour) and yesterday (series 2) are lines; the average day is
+// a neutral dashed reference, not a third hue. One y axis; crosshair hover per hour.
+func paceChart(width int, today, yesterday []int, avg []float64, ariaLabel string) template.HTML {
+	const hours = 24
+	maxV := 0.0
+	for _, v := range today {
+		maxV = math.Max(maxV, float64(v))
+	}
+	for _, v := range yesterday {
+		maxV = math.Max(maxV, float64(v))
+	}
+	for _, v := range avg {
+		maxV = math.Max(maxV, v)
+	}
+	top, step := niceMax(int(math.Ceil(maxV)))
+	plotW := float64(width - padL - padR)
+	x := func(h int) float64 { return float64(padL) + plotW*float64(h)/float64(hours-1) }
+	plotH := float64(chartH - padT - padB)
+	yf := func(v float64) float64 { return float64(padT) + plotH - plotH*v/float64(top) }
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`, width, chartH, esc(ariaLabel))
+	yAxis(&b, top, step, plotW)
+	labels := make([]string, hours)
+	for h := range labels {
+		labels[h] = fmt.Sprintf("%02d:00", h)
+	}
+	xTicks(&b, labels, x, plotW)
+	line := func(class string, n int, val func(int) float64) {
+		if n == 0 {
+			return
+		}
+		var pts []string
+		for h := 0; h < n; h++ {
+			pts = append(pts, fmt.Sprintf("%.1f,%.1f", x(h), yf(val(h))))
+		}
+		fmt.Fprintf(&b, `<polyline class="line %s" points="%s"/>`, class, strings.Join(pts, " "))
+	}
+	line("avg", len(avg), func(h int) float64 { return avg[h] })
+	line("s2", len(yesterday), func(h int) float64 { return float64(yesterday[h]) })
+	line("s1", len(today), func(h int) float64 { return float64(today[h]) })
+	// end dots and direct labels, dropped where two would collide
+	type end struct {
+		class, text string
+		h           int
+		y           float64
+	}
+	var ends []end
+	if n := len(today); n > 0 {
+		ends = append(ends, end{"s1", fmt.Sprintf("Today %d", today[n-1]), n - 1, yf(float64(today[n-1]))})
+	}
+	if n := len(yesterday); n > 0 {
+		ends = append(ends, end{"s2", fmt.Sprintf("Yesterday %d", yesterday[n-1]), n - 1, yf(float64(yesterday[n-1]))})
+	}
+	if n := len(avg); n > 0 {
+		ends = append(ends, end{"avg", fmt.Sprintf("Usual %.1f", avg[n-1]), n - 1, yf(avg[n-1])})
+	}
+	for i, e := range ends {
+		fmt.Fprintf(&b, `<circle class="dot %s" cx="%.1f" cy="%.1f" r="4"/>`, e.class, x(e.h), e.y)
+		clear := true
+		for j, o := range ends {
+			if j < i && math.Abs(o.y-e.y) < 14 && math.Abs(x(o.h)-x(e.h)) < 90 {
+				clear = false
+			}
+		}
+		if clear {
+			fmt.Fprintf(&b, `<text class="endlabel" x="%.1f" y="%.1f" dy="4">%s</text>`, x(e.h)+10, e.y, esc(e.text))
+		}
+	}
+	colW := plotW / float64(hours-1)
+	for h := 0; h < hours; h++ {
+		tip := []string{fmt.Sprintf("by %02d:59", h)}
+		if h < len(today) {
+			tip = append(tip, fmt.Sprintf("Today: %d", today[h]))
+		}
+		tip = append(tip, fmt.Sprintf("Yesterday: %d", yesterday[h]), fmt.Sprintf("Usual day: %.1f", avg[h]))
+		fmt.Fprintf(&b, `<g class="hit" tabindex="0" data-tip="%s"><rect x="%.1f" y="%d" width="%.1f" height="%d"/><line class="xh" x1="%.1f" x2="%.1f" y1="%d" y2="%d"/></g>`,
+			esc(strings.Join(tip, "\n")), x(h)-colW/2, padT, colW, chartH-padT-padB, x(h), x(h), padT, chartH-padB)
+	}
+	b.WriteString(`</svg>`)
+	return template.HTML(b.String())
+}
+
 // columnChart: one series of columns; labels the tallest and the last column.
 func columnChart(width int, labels []string, values []int, unit, ariaLabel string) template.HTML {
 	if len(labels) == 0 {

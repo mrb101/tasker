@@ -12,7 +12,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   hours, updating as it happens. Wall mode (`?wall=1`) is for a screen left open: big type, no sidebar, the
   screen kept awake. It holds a bounded snapshot, so a page left open for days does not grow. Documents waiting
   for review come first; stories and documents open in a dialog, where a document can be approved or sent back
-  with a comment without leaving the page.
+  with a comment without leaving the page. "Today vs usual" compares today with yesterday and an average day of
+  the last four weeks, with stories done through the day, counted in the viewer's time zone.
 
 ### Fixed
 

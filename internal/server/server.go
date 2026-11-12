@@ -653,6 +653,22 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		buf.WriteTo(w)
 	})
 
+	// The live page's "Today vs usual" dialog, in the viewer's time zone (?tz=Europe/Amsterdam).
+	mux.HandleFunc("GET /live/pace", func(w http.ResponseWriter, r *http.Request) {
+		data, err := paceData(st, r.URL.Query().Get("project"), r.URL.Query().Get("tz"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var buf bytes.Buffer
+		if err := s.frags.ExecuteTemplate(&buf, "pace", data); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		buf.WriteTo(w)
+	})
+
 	// Quick view of a document, with approve / request changes, for the live page.
 	mux.HandleFunc("GET /d/{ref}/peek", func(w http.ResponseWriter, r *http.Request) {
 		d, err := st.GetDoc(r.PathValue("ref"))

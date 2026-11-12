@@ -174,6 +174,7 @@
     const kind = /-D\d+$/i.test(ref) ? '/d/' : '/i/'; // a document (API-D3) or an item
     const res = await fetch(kind + encodeURIComponent(ref) + '/peek');
     if (!res.ok) { toast(await res.text(), true); return; }
+    parkTip(); // before the dialog's content is replaced
     dlg.innerHTML = await res.text();
     const pos = $('.peek-pos', dlg);
     if (pos && peek.idx >= 0) pos.textContent = `${peek.idx + 1} of ${peek.list.length}`;
@@ -219,6 +220,21 @@
       if (dep && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey)) { e.preventDefault(); openPeek(dep.dataset.peekRef); }
       return;
     }
+    // Live page: "Today vs usual" opens in the same dialog, counted on the viewer's clock.
+    const pace = e.target.closest('#main [data-pace]');
+    if (pace) {
+      e.preventDefault();
+      const q = new URLSearchParams({ tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+      if (pace.dataset.pace) q.set('project', pace.dataset.pace);
+      fetch('/live/pace?' + q).then(async (res) => {
+        if (!res.ok) { toast(await res.text(), true); return; }
+        parkTip();
+        dlg.innerHTML = await res.text();
+        peek.list = []; peek.idx = -1; // nothing to step through
+        if (!dlg.open) dlg.showModal();
+      });
+      return;
+    }
     // Live page: its cards and the stories in its feed open in the quick view too;
     // ← and → step through the cards (or the feed's stories) around it.
     const live = e.target.closest('#main .livecard[data-ref], #main .reviewcard[data-ref], #main .live-feed a[data-ref]');
@@ -246,8 +262,18 @@
   });
 
   // ---- chart tooltips: any [data-tip] mark, on hover and on keyboard focus ----
+  // An open dialog sits in the top layer, above everything else on the page: a
+  // tooltip for a chart inside it has to live inside it too.
+  function parkTip() {
+    const tip = $('#tip');
+    tip.hidden = true;
+    if (tip.parentElement !== document.body) document.body.appendChild(tip);
+  }
+  $('#peek').addEventListener('close', parkTip);
   function showTip(el, x, y) {
     const tip = $('#tip');
+    const host = el.closest('dialog[open]') || document.body;
+    if (tip.parentElement !== host) host.appendChild(tip);
     tip.textContent = el.dataset.tip; // labels are data: textContent, never innerHTML
     tip.hidden = false;
     const r = tip.getBoundingClientRect();

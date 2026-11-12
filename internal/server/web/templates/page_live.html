@@ -13,6 +13,7 @@
         {{range .Projects}}<option value="{{.Key}}" {{if eq .Key $v.Project}}selected{{end}}>{{.Key}} · {{.Name}}</option>{{end}}
       </select>
     </form>
+    <button class="btn small" type="button" data-pace="{{$v.Project}}" title="Today against yesterday and a usual day">Today vs usual</button>
     {{if $wall}}<a class="btn small" href="/live{{with $v.Project}}?project={{.}}{{end}}">Exit wall mode</a>
     {{else}}<a class="btn small" href="/live?wall=1{{with $v.Project}}&amp;project={{.}}{{end}}" title="Big type, no sidebar, keeps the screen awake">Wall mode</a>{{end}}
   </div>

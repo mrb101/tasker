@@ -1,0 +1,47 @@
+{{define "pace"}}{{$p := .P}}
+<div class="peek pace">
+  <header class="peek-head">
+    <div class="row">
+      <h2 class="peek-title">Today vs usual{{with $p.Project}} <span class="muted">· {{.}}</span>{{end}}</h2>
+      <span class="grow"></span>
+      <button class="x" type="button" data-peek="close" title="Close (Esc)">×</button>
+    </div>
+    <p class="muted small">Today so far, yesterday, and a usual day: the average of the {{$p.Days}} days before today, quiet days included. Days run on your clock ({{$p.TZ}}).</p>
+  </header>
+
+  <div class="peek-scroll">
+    <div class="pace-tiles">
+      {{range .Tiles}}
+      <section class="pace-tile">
+        <h3>{{.Name}}</h3>
+        <div class="pace-num">{{.Today}}</div>
+        <div class="pace-delta muted small">{{.Delta}}</div>
+        <div class="pace-bars">
+          <span class="pb-label">Today</span><span class="pb-track"><i class="s1 hit" tabindex="0" style="width:{{printf "%.1f" .WToday}}%" data-tip="{{.Name}}&#10;Today: {{.Today}}"></i></span><span class="pb-val">{{.Today}}</span>
+          <span class="pb-label">Yesterday</span><span class="pb-track"><i class="s2 hit" tabindex="0" style="width:{{printf "%.1f" .WYday}}%" data-tip="{{.Name}}&#10;Yesterday: {{.Yday}}"></i></span><span class="pb-val">{{.Yday}}</span>
+          <span class="pb-label">Usual day</span><span class="pb-track"><i class="avg hit" tabindex="0" style="width:{{printf "%.1f" .WAvg}}%" data-tip="{{.Name}}&#10;Usual day: {{.Avg}}"></i></span><span class="pb-val">{{.Avg}}</span>
+        </div>
+      </section>
+      {{end}}
+    </div>
+
+    <section class="chart-card pace-chart">
+      <header><h2>Stories done through the day</h2><p class="muted small">Running total by the end of each hour.</p></header>
+      <div class="legend"><span><i class="key line s1"></i>Today</span><span><i class="key line s2"></i>Yesterday</span><span><i class="key line avg"></i>Usual day</span></div>
+      {{.Chart}}
+      <details class="table-view">
+        <summary>Table</summary>
+        <div class="tablewrap"><table class="list">
+          <thead><tr><th>By the end of</th><th class="num">Today</th><th class="num">Yesterday</th><th class="num">Usual day</th></tr></thead>
+          <tbody>{{range .Hours}}
+            <tr><td>{{printf "%02d:59" .}}</td>
+              <td class="num">{{if le . $p.Hour}}{{index $p.TodayByHour .}}{{else}}<span class="muted">—</span>{{end}}</td>
+              <td class="num">{{index $p.YesterdayByHour .}}</td>
+              <td class="num">{{printf "%.1f" (index $p.AvgByHour .)}}</td></tr>
+          {{end}}</tbody>
+        </table></div>
+      </details>
+    </section>
+  </div>
+</div>
+{{end}}
