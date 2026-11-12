@@ -683,7 +683,54 @@
   }
   document.addEventListener('click', (e) => { if (e.target.closest('#live')) refresh(); });
 
+  // ---- live page ----
+  // Times are shown in the viewer's clock; entries newer than the last render
+  // light up briefly. Only the newest time seen is kept between renders.
+  let liveSeen = '';
+  function renderLive() {
+    if (!('live' in document.body.dataset)) return;
+    const today = new Date().toDateString();
+    $$('time[data-local]').forEach((t) => {
+      const d = new Date(t.getAttribute('datetime'));
+      if (isNaN(d)) return;
+      const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      t.textContent = d.toDateString() === today ? hm : 'yesterday ' + hm;
+      t.title = d.toLocaleString();
+    });
+    let newest = liveSeen;
+    $$('.live-feed time').forEach((t) => {
+      const at = t.getAttribute('datetime');
+      if (liveSeen && at > liveSeen) t.closest('li').classList.add('fresh');
+      if (at > newest) newest = at;
+    });
+    liveSeen = newest;
+  }
+  document.addEventListener('change', (e) => {
+    const sel = e.target.closest('select[data-submit]');
+    if (sel) sel.form.submit();
+  });
+  if ('live' in document.body.dataset) {
+    // Durations ("2h 10m") are rendered by the server: refresh them every minute while visible.
+    setInterval(() => { if (!document.hidden) refresh(); }, 60 * 1000);
+    if ('wall' in document.body.dataset) {
+      // A screen left open for days: start clean every six hours, and keep it awake.
+      setTimeout(() => location.reload(), 6 * 60 * 60 * 1000);
+      let lock = null;
+      const awake = async () => {
+        try {
+          if (!document.hidden && navigator.wakeLock && !lock) {
+            lock = await navigator.wakeLock.request('screen');
+            lock.addEventListener('release', () => { lock = null; });
+          }
+        } catch (_) { /* not allowed here: the screen may sleep */ }
+      };
+      document.addEventListener('visibilitychange', awake);
+      awake();
+    }
+  }
+
   function afterRender() {
+    renderLive();
     paintBell();
     applyFilter();
     syncSelection();

@@ -268,6 +268,7 @@ type Page struct {
 	Project  *store.Project
 	Projects []*store.Project
 	Reviews  int
+	Wall     bool // a screen left open: no sidebar, big type, kept awake
 	D        map[string]any
 }
 
@@ -345,6 +346,21 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		s.render(w, r, "home", &Page{Title: "Projects", Projects: projects, D: map[string]any{"Reviews": reviews, "Activity": act}})
 	})
 
+	// Live: what is in progress across projects, and what just happened.
+	mux.HandleFunc("GET /live", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		v, err := st.Live(q.Get("project"))
+		if err != nil {
+			s.webErr(w, r, err)
+			return
+		}
+		var p *store.Project
+		if v.Project != "" {
+			p, _ = st.GetProject(v.Project)
+		}
+		wall := q.Get("wall") == "1"
+		s.render(w, r, "live", &Page{Title: "Live", Tab: "live", Project: p, Wall: wall, D: map[string]any{"Live": v, "Wall": wall}})
+	})
 	mux.HandleFunc("GET /reviews", func(w http.ResponseWriter, r *http.Request) {
 		docs, err := st.ReviewQueue()
 		if err != nil {

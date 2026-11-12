@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/app.css?v={{.Asset}}">
 <script defer src="/static/app.js?v={{.Asset}}"></script>
 </head>
-<body data-asset="{{.Asset}}" data-project="{{if .Project}}{{.Project.Key}}{{end}}">
+<body data-asset="{{.Asset}}" data-project="{{if .Project}}{{.Project.Key}}{{end}}"{{if .Wall}} class="wall" data-wall{{end}}{{if eq .Tab "live"}} data-live{{end}}>
 <div class="shell">
 <aside class="sidenav" id="sidenav">
   <div class="side-top">
@@ -52,6 +52,7 @@
       {{if .Project.PlanGate}}<span class="chip gate" title="Items need an approved plan before they can start">plan gate on</span>{{end}}
       <div class="sep"></div>
       {{end}}
+      <a class="{{if eq .Tab "live"}}on{{end}}" href="/live{{if .Project}}?project={{.Project.Key}}{{end}}"><i>●</i>Live</a>
       <a class="{{if eq .Tab "reviews"}}on{{end}}" href="/reviews"><i>✓</i>Reviews{{if .Reviews}}<b class="badge">{{.Reviews}}</b>{{end}}</a>
       <a class="{{if eq .Title "Projects"}}on{{end}}" href="/"><i>⌂</i>All projects</a>
     </nav>

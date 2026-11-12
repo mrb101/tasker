@@ -1,0 +1,63 @@
+{{define "content"}}{{$v := .D.Live}}{{$wall := .D.Wall}}
+<div class="page live">
+  <div class="live-head">
+    <h1>Live{{with $v.Project}} <span class="muted">· {{.}}</span>{{end}}</h1>
+    <span class="live-dot" title="This page updates as things happen">live</span>
+    <span class="muted small">updated <time data-local="time" datetime="{{$v.At}}">{{date $v.At}}</time></span>
+    <span class="grow"></span>
+    <span class="live-stats"><b>{{len $v.Now}}</b> in progress · <b>{{$v.Started}}</b> started · <b>{{$v.Done}}</b> done <span class="muted">in the last 24h</span></span>
+    <form class="live-filter" method="get" action="/live">
+      {{if $wall}}<input type="hidden" name="wall" value="1">{{end}}
+      <select name="project" aria-label="Project" data-submit>
+        <option value="">All projects</option>
+        {{range .Projects}}<option value="{{.Key}}" {{if eq .Key $v.Project}}selected{{end}}>{{.Key}} · {{.Name}}</option>{{end}}
+      </select>
+    </form>
+    {{if $wall}}<a class="btn small" href="/live{{with $v.Project}}?project={{.}}{{end}}">Exit wall mode</a>
+    {{else}}<a class="btn small" href="/live?wall=1{{with $v.Project}}&amp;project={{.}}{{end}}" title="Big type, no sidebar, keeps the screen awake">Wall mode</a>{{end}}
+  </div>
+
+  <section class="live-now" aria-label="In progress">
+    {{range $v.Now}}
+    <a class="livecard st-{{.Status}}" href="/i/{{.Ref}}">
+      <div class="lc-top">
+        <span class="lc-state" title="{{.Status}}">{{if eq .Status "active"}}in progress{{else}}in review{{end}}</span>
+        <span class="grow"></span>
+        <span class="lc-for" title="since {{date .Since}}">{{.For}}</span>
+      </div>
+      <div class="lc-ref"><span class="pkey">{{.Project}}</span> {{.Ref}} {{template "type" .Type}}</div>
+      <div class="lc-title">{{.Title}}</div>
+      <div class="lc-meta">
+        {{with .ClaimedBy}}<span class="who">{{.}}</span>{{else}}{{with .Assignee}}<span class="who">{{.}}</span>{{end}}{{end}}
+        {{if .Queue}}<span class="muted">{{.Queue}}</span>{{end}}
+        {{if .ChangedFiles}}<span class="chip diff">{{.ChangedFiles}} file{{if ne .ChangedFiles 1}}s{{end}} <span class="add">+{{.LinesAdded}}</span><span class="del">−{{.LinesDeleted}}</span></span>
+        {{else if .WIPFiles}}<span class="chip">{{.WIPFiles}} file{{if ne .WIPFiles 1}}s{{end}} changing</span>{{end}}
+        {{if .Overlaps}}<span class="chip warn" title="{{range $i, $o := .Overlaps}}{{if $i}}; {{end}}{{$o.Ref}}: {{join $o.Paths ", "}}{{end}}">⚠ overlaps {{range $i, $o := .Overlaps}}{{if $i}}, {{end}}{{$o.Ref}}{{end}}</span>{{end}}
+      </div>
+      {{with .EpicTitle}}<div class="lc-epic ellipsis">{{.}}</div>{{end}}
+    </a>
+    {{else}}
+    <p class="empty">Nothing in progress right now.</p>
+    {{end}}
+  </section>
+
+  <h2 class="live-h2">Last 24 hours</h2>
+  {{if $v.Feed}}
+  <ol class="live-feed">
+    {{range $v.Feed}}
+    <li class="ev ev-{{.Kind}}">
+      <time data-local="time" datetime="{{.CreatedAt}}">{{date .CreatedAt}}</time>
+      <span class="ev-ic" aria-hidden="true">{{if eq .Kind "done"}}✔{{else if eq .Kind "started"}}▶{{else if eq .Kind "review"}}◐{{else if eq .Kind "overlap"}}⚠{{else if eq .Kind "plan"}}✎{{else if eq .Kind "approved"}}✓{{else if eq .Kind "changes"}}↺{{else if eq .Kind "shipped"}}⚑{{else}}✕{{end}}</span>
+      <a class="ref" href="/r/{{.Ref}}">{{.Ref}}</a>
+      <span class="ev-what">{{if eq .Kind "done"}}done{{else if eq .Kind "started"}}started{{else if eq .Kind "review"}}to review{{else if eq .Kind "overlap"}}overlaps{{else if eq .Kind "plan"}}submitted for review{{else if eq .Kind "approved"}}approved{{else if eq .Kind "changes"}}changes requested{{else if eq .Kind "shipped"}}shipped{{else}}cancelled{{end}}</span>
+      <span class="ev-title ellipsis" {{if eq .Kind "overlap"}}title="{{.Detail}}"{{end}}>{{.Title}}</span>
+      {{if and (eq .Kind "done") .Files}}<span class="chip diff">{{.Files}} file{{if ne .Files 1}}s{{end}} <span class="add">+{{.Added}}</span><span class="del">−{{.Deleted}}</span></span>{{end}}
+      <span class="ev-who muted">{{.Actor}}</span>
+    </li>
+    {{end}}
+  </ol>
+  {{else}}
+  <p class="empty">Nothing happened in the last 24 hours.</p>
+  {{end}}
+</div>
+{{end}}
