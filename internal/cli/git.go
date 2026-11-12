@@ -173,6 +173,17 @@ func sumChanges(c *store.Changes) {
 	}
 }
 
+// branchIsFor reports whether the branch checked out is the item's: the branch
+// tasker recorded, or any branch whose name carries the item's ref
+// (feat/cos-1448-victoriatraces is COS-1448's). Teams that name branches
+// themselves never tell tasker, so the ref is what ties them together.
+func branchIsFor(cur string, it *store.Item) bool {
+	if cur == "" || cur == "HEAD" { // detached: no branch to go by
+		return false
+	}
+	return cur == it.Branch || refRe(it.Ref).MatchString(cur)
+}
+
 // changesForItem gathers the changes of an item's branch in this worktree.
 // It refuses when HEAD is on another branch, unless anyway is set.
 func changesForItem(it *store.Item, base string, anyway bool) (*store.Changes, error) {
@@ -183,13 +194,12 @@ func changesForItem(it *store.Item, base string, anyway bool) (*store.Changes, e
 	if err != nil {
 		return nil, err
 	}
-	if !anyway {
-		if it.Branch == "" {
-			return nil, fmt.Errorf("%s has no branch recorded", it.Ref)
+	if !anyway && !branchIsFor(cur, it) {
+		want := it.Branch
+		if want == "" {
+			want = "a branch named after " + it.Ref
 		}
-		if cur != it.Branch {
-			return nil, fmt.Errorf("this worktree is on %s, not %s (switch to it, or pass --record-anyway)", cur, it.Branch)
-		}
+		return nil, fmt.Errorf("this worktree is on %s, not %s (switch to it, or pass --record-anyway)", cur, want)
 	}
 	return collectChanges(base)
 }

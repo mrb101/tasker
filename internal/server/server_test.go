@@ -207,7 +207,7 @@ func TestAPIFlowAndPages(t *testing.T) {
 		if p == "/live/pace?tz=Europe/Amsterdam" && (!strings.Contains(string(body), "Europe/Amsterdam") || !strings.Contains(string(body), "Stories done through the day")) {
 			t.Fatalf("the pace dialog:\n%s", body)
 		}
-		if p == "/d/API-D1/peek" &&!strings.Contains(string(body), `data-api="POST /api/docs/API-D1/actions/approve" data-then="close-peek"`) {
+		if p == "/d/API-D1/peek" && !strings.Contains(string(body), `data-api="POST /api/docs/API-D1/actions/approve" data-then="close-peek"`) {
 			t.Fatalf("the document quick view has no approve button:\n%s", body)
 		}
 		if p == "/live" && !strings.Contains(string(body), `class="reviewcard" href="/d/API-D1" data-ref="API-D1"`) {

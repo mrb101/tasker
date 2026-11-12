@@ -10,6 +10,27 @@ import (
 	"github.com/mrb101/tasker/internal/store"
 )
 
+func TestBranchIsFor(t *testing.T) {
+	it := &store.Item{Ref: "COS-1448", Branch: "cos-1448-keep-traces-in-victoriatraces"}
+	for cur, want := range map[string]bool{
+		"cos-1448-keep-traces-in-victoriatraces": true, // the branch tasker recorded
+		"feat/cos-1448-victoriatraces":           true, // named by the team, carrying the ref
+		"COS-1448":                               true,
+		"fix/cos-14480-other":                    false, // another story
+		"feat/xcos-1448":                         false,
+		"main":                                   false,
+		"HEAD":                                   false, // detached
+		"":                                       false,
+	} {
+		if branchIsFor(cur, it) != want {
+			t.Errorf("%q: %v", cur, !want)
+		}
+	}
+	if !branchIsFor("skema-12-x", &store.Item{Ref: "SKEMA-12"}) {
+		t.Error("an item with no recorded branch is still found by its ref")
+	}
+}
+
 func TestParseNumstatZ(t *testing.T) {
 	out := "10\t2\tinternal/store/work.go\x00-\t-\tlogo.png\x001\t1\t\x00docs/old name.md\x00docs/new name.md\x003\t0\tlast.go\x00"
 	got := parseNumstatZ(out)

@@ -89,12 +89,12 @@ func (a *app) activeHere() (*store.Item, string) {
 }
 
 // reportWIP tells the server which files the item's branch is changing, when
-// this worktree is on that branch. Best effort: it never fails a command.
+// this worktree is on that branch (see branchIsFor). Best effort: it never fails a command.
 func (a *app) reportWIP(it *store.Item, base string) bool {
-	if it == nil || it.Branch == "" {
+	if it == nil {
 		return false
 	}
-	if cur, err := git("rev-parse", "--abbrev-ref", "HEAD"); err != nil || cur != it.Branch {
+	if cur, err := git("rev-parse", "--abbrev-ref", "HEAD"); err != nil || !branchIsFor(cur, it) {
 		return false
 	}
 	paths, err := worktreePaths(base)
