@@ -26,6 +26,9 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   and stories can declare what they will change (`--touches`, or `touches:` in their plan's frontmatter). `next` and `start` warn when another queue is
   changing the same files, without blocking, and log each warning in the story's activity; board cards show
   the overlap and the story page lists work on the same files.
+- `tasker why FILE[:LINE[-END]]` (and MCP `tasker_lookup_commits`): from lines of code (git blame) or a file's
+  history to the stories that made them, with their plans, decisions and reviews. Commits are matched by the
+  commits recorded for stories, item refs in messages, PR numbers in squash commits, or merged branch names.
 - A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
   and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
 

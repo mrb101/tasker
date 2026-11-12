@@ -106,7 +106,7 @@ func (a *app) rootCmd() *cobra.Command {
 		a.projectCmd(), a.epicCmd(), a.itemCmd(), a.queueCmd(), a.docCmd(), a.releaseCmd(),
 		a.showCmd(), a.nextCmd(), a.startCmd(), a.finishCmd(), a.claimCmd(), a.unclaimCmd(),
 		a.linkCmd(false), a.linkCmd(true), a.commentCmd(), a.searchCmd(), a.activityCmd(),
-		a.addAlias(), a.lsAlias(), a.mcpCmd(), a.backfillCmd(), a.contextCmd(),
+		a.addAlias(), a.lsAlias(), a.mcpCmd(), a.backfillCmd(), a.contextCmd(), a.whyCmd(),
 	)
 	return root
 }

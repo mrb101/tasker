@@ -63,6 +63,7 @@ Add --json to any command for machine-readable output.
   tasker doc show API-D3 --raw           # markdown only
   tasker search "rate limit"
   tasker context internal/auth/          # what tasker knows about files (dir/ = everything under it)
+  tasker why internal/auth/login.go:40   # the stories, plans and decisions behind these lines
 
 ## Updating
   tasker item update API-12 --status done --add-label perf --if-version 4   # exit 4 if changed meanwhile

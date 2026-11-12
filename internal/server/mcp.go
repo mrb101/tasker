@@ -121,6 +121,21 @@ var mcpTools = []mcpTool{
 		},
 	},
 	{
+		Name: "tasker_lookup_commits", Description: "Why is the code like this? Give commits (from git blame or git log: id and full message) and get the items behind them, with their plans, decisions and reviews. Matches recorded commits, item refs in messages, PR numbers and merged branch names.",
+		InputSchema: obj(map[string]any{"project": str("Project key (optional; limits matching)"),
+			"commits": map[string]any{"type": "array", "items": obj(map[string]any{"sha": str("Commit id"), "message": str("Full commit message")}, "sha")}}, "commits"),
+		run: func(s *Server, _ string, raw json.RawMessage) (any, error) {
+			a, err := args[struct {
+				Project string              `json:"project"`
+				Commits []store.CommitQuery `json:"commits"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			return s.store.LookupCommits(a.Project, a.Commits)
+		},
+	},
+	{
 		Name: "tasker_report_wip", Description: "Report the files your active item's branch is changing (git diff --name-only BASE plus uncommitted), so other agents get overlap warnings. Call it as you work.",
 		InputSchema: obj(map[string]any{"ref": str("Item ref"), "paths": strs("Changed paths relative to the repository root")}, "ref", "paths"),
 		run: func(s *Server, actor string, raw json.RawMessage) (any, error) {

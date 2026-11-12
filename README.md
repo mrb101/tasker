@@ -51,6 +51,10 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
   (`--touches internal/auth/`, or `touches:` in the frontmatter of their plan). `next` and `start` warn when another queue is changing the same files (never
   blocking; each warning is kept in the story's activity), board cards show `⚠ overlaps API-31`, and the story
   page lists the work on the same files.
+- **Why is the code like this?** `tasker why internal/store/work.go:146` (or a range, or a whole file) runs
+  git blame or git log in your checkout and finds the stories behind those commits — by commits recorded on
+  finish, item refs in commit messages, PR numbers in squash commits, or merged branch names — with their plans,
+  decisions and reviews. Put the item ref in commit messages and PR titles and it works after any merge style.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
 
 ## Agent setup

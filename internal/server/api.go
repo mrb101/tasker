@@ -289,6 +289,16 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		}
 		return map[string]int{"paths": len(in.Paths)}, nil
 	}))
+	mux.HandleFunc("POST /api/lookup/commits", h(func(r *http.Request) (any, error) {
+		var in struct {
+			Project string              `json:"project"`
+			Commits []store.CommitQuery `json:"commits"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return st.LookupCommits(in.Project, in.Commits)
+	}))
 	mux.HandleFunc("GET /api/context", h(func(r *http.Request) (any, error) {
 		q := r.URL.Query()
 		return st.Context(store.ContextQuery{Project: q.Get("project"), Ref: q.Get("ref"), Paths: q["path"], Queue: q.Get("queue")})

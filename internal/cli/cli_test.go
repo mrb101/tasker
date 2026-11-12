@@ -102,3 +102,60 @@ func must[T any](v T, err error) T {
 	}
 	return v
 }
+
+func TestWhy(t *testing.T) {
+	k := newTasker(t)
+	k.run("project", "create", "API", "Api")
+	k.run("add", "-p", "API", "Rate limit login")
+	k.run("add", "-p", "API", "Lockout")
+	k.run("item", "update", "API-2", "--pr", "https://github.com/me/api/pull/5")
+	plan := filepath.Join(t.TempDir(), "plan.md")
+	os.WriteFile(plan, []byte("# Limit plan\n"), 0o644)
+	k.run("doc", "create", "-p", "API", "--type", "plan", "--for", "API-1", "-f", plan)
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "t")
+	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "t")
+	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.com")
+	g := func(args ...string) {
+		t.Helper()
+		if _, err := git(args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(body string) { os.WriteFile(filepath.Join(dir, "a.go"), []byte(body), 0o644) }
+	g("init", "-q", "-b", "main")
+	write("one\ntwo\nthree\n")
+	g("add", ".")
+	g("commit", "-q", "-m", "start")
+	write("one\nTWO\nthree\n")
+	g("commit", "-qam", "API-1: limit")
+	write("one\nTWO\nTHREE\nfour\n")
+	g("commit", "-qam", "Lockout (#5)")
+	write("ONE\nTWO\nTHREE\nfour\n") // not committed
+
+	out := k.run("why", "-p", "API", "a.go:1-4")
+	for _, want := range []string{
+		"a.go:1-4",
+		`"API-1: limit"  line 2`,
+		"→ API-1 Rate limit login (triage)  [by ref in message]",
+		`API-D1 plan "Limit plan" [draft]`,
+		`"Lockout (#5)"  lines 3-4`,
+		"→ API-2 Lockout (triage, https://github.com/me/api/pull/5)  [by PR number]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "000000000") {
+		t.Fatalf("uncommitted line shown:\n%s", out)
+	}
+	out = k.run("why", "-p", "API", "a.go")
+	if !strings.Contains(out, "→ API-1") || !strings.Contains(out, "→ API-2") || !strings.Contains(out, "(1 more commit(s) with no item)") {
+		t.Fatalf("file mode:\n%s", out)
+	}
+}
