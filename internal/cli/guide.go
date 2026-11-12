@@ -39,7 +39,8 @@ Add --json to any command for machine-readable output.
   tasker context                       # before editing: work in flight, open findings and past stories (with
                                        # their plans) for the files you change; also tells others what you touch
   # if the project has a plan gate (or the item is non-trivial), plan first:
-  tasker doc create --type plan --for API-12 -f plan.md --submit
+  tasker doc create --type plan --for API-12 -f plan.md --submit   # frontmatter "touches: [dir/, file.go]"
+                                                                  # sets what API-12 will change
   tasker doc wait API-D3               # exit 0 approved, 10 changes requested (read comments, revise:)
   tasker doc update API-D3 -f plan.md  # new revision, back to review
   # ... implement on the branch, commit, open PR ...

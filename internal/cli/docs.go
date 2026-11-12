@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,12 +53,27 @@ func (a *app) docCmd() *cobra.Command {
 				return err
 			}
 			in.Body = stripFrontmatter(text)
-			return call(a, "POST", "/api/projects/"+esc(p)+"/docs", in, func(d *store.Doc) {
+			touches, err := planTouches(text)
+			if err != nil {
+				return err
+			}
+			data, err := a.client().raw("POST", "/api/projects/"+esc(p)+"/docs", in)
+			if err != nil {
+				return err
+			}
+			d := &store.Doc{}
+			if err := json.Unmarshal(data, d); err != nil {
+				return err
+			}
+			if a.json {
+				a.printJSON(data)
+			} else {
 				fmt.Fprintf(a.out, "created %s [%s] %s (%s)\n", d.Ref, d.Type, d.Title, d.Status)
 				if d.Status == "in_review" {
 					fmt.Fprintf(a.out, "wait for the review: tasker doc wait %s\n", d.Ref)
 				}
-			})
+			}
+			return a.applyPlanTouches(d, touches)
 		},
 	}
 	create.Flags().StringVarP(&in.Type, "type", "t", "note", "research|plan|review|decision|note")
@@ -98,10 +114,14 @@ func (a *app) docCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			patch := map[string]any{}
+			var touches *[]string
 			if text, ok, err := readText(ubody, ufile); err != nil {
 				return err
 			} else if ok {
 				patch["body"] = stripFrontmatter(text)
+				if touches, err = planTouches(text); err != nil {
+					return err
+				}
 			}
 			if cmd.Flags().Changed("title") {
 				patch["title"] = utitle
@@ -115,9 +135,20 @@ func (a *app) docCmd() *cobra.Command {
 			if ifRev > 0 {
 				patch["if_revision"] = ifRev
 			}
-			return call(a, "PATCH", "/api/docs/"+esc(args[0]), patch, func(d *store.Doc) {
+			data, err := a.client().raw("PATCH", "/api/docs/"+esc(args[0]), patch)
+			if err != nil {
+				return err
+			}
+			d := &store.Doc{}
+			if err := json.Unmarshal(data, d); err != nil {
+				return err
+			}
+			if a.json {
+				a.printJSON(data)
+			} else {
 				fmt.Fprintf(a.out, "updated %s → r%d (%s)\n", d.Ref, d.Revision, d.Status)
-			})
+			}
+			return a.applyPlanTouches(d, touches)
 		},
 	}
 	update.Flags().StringVar(&ubody, "body", "", "new markdown body")
@@ -296,11 +327,54 @@ func sinceSubmit(cs []store.Comment) []store.Comment {
 // ---- markdown files <-> documents ----
 
 type frontmatter struct {
-	Tasker  string   `yaml:"tasker,omitempty"`
-	Type    string   `yaml:"type,omitempty"`
-	Title   string   `yaml:"title,omitempty"`
-	For     []string `yaml:"for,omitempty"`
-	Project string   `yaml:"project,omitempty"`
+	Tasker  string    `yaml:"tasker,omitempty"`
+	Type    string    `yaml:"type,omitempty"`
+	Title   string    `yaml:"title,omitempty"`
+	For     []string  `yaml:"for,omitempty"`
+	Project string    `yaml:"project,omitempty"`
+	Touches *[]string `yaml:"touches,omitempty"` // a plan's files and directories: set on the items it plans
+}
+
+// planTouches reads `touches:` from a document's frontmatter (nil when absent).
+func planTouches(text string) (*[]string, error) {
+	fmText, _, ok := splitFrontmatter(text)
+	if !ok {
+		return nil, nil
+	}
+	var fm frontmatter
+	if err := yaml.Unmarshal([]byte(fmText), &fm); err != nil {
+		return nil, fmt.Errorf("frontmatter: %w", err)
+	}
+	return fm.Touches, nil
+}
+
+// applyPlanTouches sets a plan's `touches:` on the items it plans, so overlap
+// warnings work before any code is written. The plan is the authority: it
+// replaces what those items declared. Epics are left alone.
+func (a *app) applyPlanTouches(d *store.Doc, touches *[]string) error {
+	if touches == nil || d.Type != "plan" {
+		return nil
+	}
+	if len(d.Links) == 0 {
+		full := &store.Doc{}
+		if err := a.client().Do("GET", "/api/docs/"+esc(d.Ref), nil, full); err != nil {
+			return err
+		}
+		d = full
+	}
+	var refs []string
+	for _, l := range d.Links {
+		if l.Kind == "item" && l.Role == "plans" {
+			if err := a.client().Do("PATCH", "/api/items/"+esc(l.Target), map[string]any{"touches": *touches}, nil); err != nil {
+				return fmt.Errorf("%s: touches: %w", l.Target, err)
+			}
+			refs = append(refs, l.Target)
+		}
+	}
+	if len(refs) > 0 && !a.json {
+		fmt.Fprintf(a.out, "touches of %s: %s\n", strings.Join(refs, ", "), strings.Join(*touches, ", "))
+	}
+	return nil
 }
 
 // splitFrontmatter returns the YAML frontmatter block (without fences) and the body.
@@ -350,7 +424,8 @@ func (a *app) pushCmd() *cobra.Command {
 "tasker: API-D7" into the file's frontmatter; later pushes update the same document
 (a new revision; it goes back to review if it was already submitted).
 
-Frontmatter (all optional): tasker, type, title, for: [API-12, API-E2], project.
+Frontmatter (all optional): tasker, type, title, for: [API-12, API-E2], project, and for plans
+touches: [internal/auth/, cmd/api/main.go] — set on the items the plan is for (overlap warnings).
 Type defaults to --type, else is guessed from the path (plan/research/review/adr).`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -380,6 +455,9 @@ Type defaults to --type, else is guessed from the path (plan/research/review/adr
 						return fmt.Errorf("%s: %w", path, err)
 					}
 					fmt.Fprintf(a.out, "%s → %s r%d (%s)\n", path, d.Ref, d.Revision, d.Status)
+					if err := a.applyPlanTouches(&d, fm.Touches); err != nil {
+						return fmt.Errorf("%s: %w", path, err)
+					}
 					continue
 				}
 				project := fm.Project
@@ -407,6 +485,9 @@ Type defaults to --type, else is guessed from the path (plan/research/review/adr
 					return err
 				}
 				fmt.Fprintf(a.out, "%s → created %s [%s] (%s)\n", path, d.Ref, d.Type, d.Status)
+				if err := a.applyPlanTouches(&d, fm.Touches); err != nil {
+					return fmt.Errorf("%s: %w", path, err)
+				}
 			}
 			return nil
 		},

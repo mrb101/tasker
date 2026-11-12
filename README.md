@@ -48,7 +48,7 @@ It talks to `TASKER_URL` (default `http://localhost:7777`).
   change them (⚠ when another queue does), open findings and bugs pointing at them, and finished stories that
   changed them with their plans and decisions. Without paths it uses what your worktree changes. Agents report
   the files they are changing as they run `next` and `context`; stories can declare what they will change
-  (`--touches internal/auth/`). `next` and `start` warn when another queue is changing the same files (never
+  (`--touches internal/auth/`, or `touches:` in the frontmatter of their plan). `next` and `start` warn when another queue is changing the same files (never
   blocking; each warning is kept in the story's activity), board cards show `⚠ overlaps API-31`, and the story
   page lists the work on the same files.
 - Documents link to items/epics with a role: `plans`, `informs`, `found` (review findings → the items they created).
