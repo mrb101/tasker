@@ -204,6 +204,19 @@ Layout: `internal/store` (SQLite + all rules), `internal/server` (API, MCP, web 
 
 Third-party code bundled into the binary is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+### Cutting a release
+
+Record each change under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) as you make it. To release, on an
+up-to-date `main`:
+
+```sh
+make release V=0.2.0
+```
+
+This moves the Unreleased notes under `0.2.0` with today's date, runs the tests, commits, tags `v0.2.0` and
+pushes. The tag starts the release workflow, which builds Linux and macOS binaries and publishes a GitHub
+release with that version's notes. Versions follow semver: bump the patch for fixes, the minor for features.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

@@ -1,0 +1,45 @@
+# Changelog
+
+Notable changes to tasker. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
+versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add an entry under
+**Unreleased** with each change; `make release V=x.y.z` turns that section into the release.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-12
+
+The first tagged release.
+
+### Added
+
+- One Go binary that serves a web UI, a JSON API, an MCP endpoint and the agents' CLI over an embedded SQLite
+  database. Work is organised as projects, epics and items; queues map one-to-one to git worktrees and run their
+  items in order, one branch each. Research, plans and reviews are documents with revisions and an
+  approve/request-changes loop.
+- A project dashboard for a chosen period: stories done, open and blocked work, cycle time, documents waiting
+  for review, scope against done, throughput, progress by epic, work per queue, oldest work in progress and
+  activity by person or agent. Cards show the epic's short reference and name.
+- Bulk triage: select stories on the board, queue pages and item lists and change their queue, priority, epic,
+  status or labels together in one transaction. `tasker item update` accepts several refs.
+- Notifications when a review or a merge waits on someone: browser notifications from open tabs, and an ntfy
+  topic through `TASKER_NOTIFY_URL` (`TASKER_PUBLIC_URL` makes them open the right page).
+- Automatic database backups: a snapshot every 24 hours, keeping the newest 14, configurable through
+  `TASKER_BACKUP_EVERY`, `TASKER_BACKUP_KEEP` and `TASKER_BACKUP_DIR`. Settings lists snapshots for download.
+- Releases: a goal plus the stories that reach it, shipped on a fixed date or when their scope is done. The
+  release page forecasts from measured pace, lists risks, and shows a burn-up, scope history and release notes.
+- The release in progress, planned releases and the last shipped one on the dashboard.
+- A release timeline on the Releases page and the dashboard, with likely-finish ranges. Releases without a fixed
+  date are forecast one after another.
+- Forecasts start from a release's start date, are given in days, and say how far a release is ahead of or
+  behind its target.
+- Forecasts count only stories that were started before they were finished, and include the current week.
+- Board columns can be minimized to a narrow strip, remembered per project.
+- Optional serving through a shared Traefik with `compose.edge-proxy.yaml`.
+
+### Changed
+
+- The web UI works well on phones.
+- Started stories are found in one pass over the activity log, so forecasts load faster.
+
+[Unreleased]: https://github.com/mrb101/tasker/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/mrb101/tasker/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: build test run docker up down install
+.PHONY: build test run docker up down install release
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/tasker ./cmd/tasker
@@ -22,3 +22,7 @@ up:
 
 down:
 	docker compose down
+
+# make release V=0.2.0 — see CHANGELOG.md
+release:
+	scripts/release.sh $(V)
