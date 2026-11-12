@@ -523,5 +523,12 @@ func (s *Store) Board(projectKey string, perQueue int) ([]*Queue, error) {
 	for _, q := range queues {
 		sort.SliceStable(q.RecentDone, func(a, b int) bool { return q.RecentDone[a].ClosedAt > q.RecentDone[b].ClosedAt })
 	}
+	ov, err := s.inFlightOverlaps(queues[0].ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		it.Overlaps = ov[it.ID]
+	}
 	return queues, nil
 }

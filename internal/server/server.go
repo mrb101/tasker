@@ -608,8 +608,9 @@ func (s *Server) routesWeb(mux *http.ServeMux) {
 		p, _ := st.GetProject(it.Project)
 		epics, _ := st.ListEpics(p.Key, true)
 		queues, _ := st.ListQueues(p.Key, false)
+		ctx, _ := st.Context(store.ContextQuery{Ref: it.Ref})
 		s.render(w, r, "item", &Page{Title: it.Ref + " " + it.Title, Tab: "items", Project: p, D: map[string]any{
-			"It": it, "Epics": epics, "Queues": queues, "Releases": openReleases(st, p.Key),
+			"It": it, "Epics": epics, "Queues": queues, "Releases": openReleases(st, p.Key), "Ctx": ctx,
 		}})
 	})
 

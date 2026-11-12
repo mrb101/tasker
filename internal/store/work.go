@@ -133,7 +133,24 @@ func (s *Store) Start(actor, ref string, in StartInput) (*Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.GetItem(ref)
+	// Warn, never block: other queues working on the same files. The log shows
+	// later how often parallel work collided.
+	ov, _ := s.Overlaps(ref)
+	if len(ov) > 0 {
+		_ = s.write(actor, func(t *txc) error {
+			it, err := s.item(t, ref)
+			if err != nil {
+				return err
+			}
+			return t.log(it.ProjectID, it.Project, it.Ref, "item.overlap", overlapDetail(ov))
+		})
+	}
+	it, err := s.GetItem(ref)
+	if err != nil {
+		return nil, err
+	}
+	it.Overlaps = ov
+	return it, nil
 }
 
 type FinishInput struct {
@@ -172,6 +189,9 @@ func (s *Store) Finish(actor, ref string, in FinishInput) (*Item, error) {
 			if err := s.recordChangesTx(t, it, in.Changes); err != nil {
 				return err
 			}
+		}
+		if _, err := t.Exec(`DELETE FROM item_files WHERE item_id = ? AND source = 'wip'`, it.ID); err != nil {
+			return err
 		}
 		if strings.TrimSpace(in.Comment) != "" {
 			if err := s.addCommentTx(t, it.ProjectID, it.Project, KindItem, it.ID, it.Ref, "comment", 0, in.Comment); err != nil {
@@ -213,6 +233,7 @@ type NextResult struct {
 	NeedsPlan  bool      `json:"needs_plan"`
 	Plan       *DocRef   `json:"plan,omitempty"`
 	Skipped    []Skipped `json:"skipped,omitempty"`
+	Overlaps   []Overlap `json:"overlaps,omitempty"` // work in other queues on the same files
 	Message    string    `json:"message"`
 }
 
@@ -331,6 +352,9 @@ func (s *Store) Next(nq NextQuery) (*NextResult, error) {
 	}
 	res.Plan = plan
 	res.NeedsPlan = pr.PlanGate && (plan == nil || plan.Status != "approved")
+	if res.Overlaps, err = s.Overlaps(pick.Ref); err != nil {
+		return nil, err
+	}
 	switch {
 	case res.Resume:
 		res.Message = "resume " + pick.Ref

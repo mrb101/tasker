@@ -277,6 +277,22 @@ func (s *Server) routesAPI(mux *http.ServeMux) {
 		}
 		return st.RecordChanges(actorOf(r), r.PathValue("ref"), in)
 	}))
+	mux.HandleFunc("PUT /api/items/{ref}/wip", h(func(r *http.Request) (any, error) {
+		var in struct {
+			Paths []string `json:"paths"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		if err := st.RecordWIP(actorOf(r), r.PathValue("ref"), in.Paths); err != nil {
+			return nil, err
+		}
+		return map[string]int{"paths": len(in.Paths)}, nil
+	}))
+	mux.HandleFunc("GET /api/context", h(func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return st.Context(store.ContextQuery{Project: q.Get("project"), Ref: q.Get("ref"), Paths: q["path"], Queue: q.Get("queue")})
+	}))
 	mux.HandleFunc("GET /api/items/{ref}/base", h(func(r *http.Request) (any, error) {
 		base, err := st.ItemBase(r.PathValue("ref"))
 		if err != nil {

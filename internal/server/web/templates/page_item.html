@@ -22,6 +22,7 @@
         {{if $it.Body}}{{md $it.Body}}{{else}}<p class="empty">No description. <a href="#" data-toggle="#editform">Add one</a></p>{{end}}
       </div>
 
+      {{if $it.Touches}}<p class="small muted">Touches {{range $i, $t := $it.Touches}}{{if $i}}, {{end}}<code>{{$t}}</code>{{end}}</p>{{end}}
       {{if $it.Locations}}
       <h2>In the code</h2>
       <div class="panel locations">
@@ -97,6 +98,16 @@
       {{if $it.SharesBranch}}
       <div class="panel small">Shares branch with {{range $it.SharesBranch}}<a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a> {{end}}</div>
       {{end}}
+
+      {{with .D.Ctx}}{{if or .InFlight .Open .History}}
+      <h3>Same files</h3>
+      <div class="panel deps ctx small">
+        {{range .InFlight}}<div class="dep {{if .OtherQueue}}warn{{end}}" title="{{join .Paths ", "}}">{{if .OtherQueue}}⚠ {{end}}<a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span><span class="muted">{{.Queue}}</span>{{template "status" .Status}}</div>{{end}}
+        {{range .Open}}<div class="dep" title="{{join .Paths ", "}}">{{template "type" .Type}}<a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{template "status" .Status}}</div>{{end}}
+        {{if .History}}<div class="muted small">Changed these files before</div>
+        {{range .History}}<div class="dep ok" title="{{join .Paths ", "}}"><a class="ref" href="/i/{{.Ref}}">{{.Ref}}</a><span class="grow ellipsis">{{.Title}}</span>{{range .Docs}}<a class="ref" href="/d/{{.Ref}}" title="{{.Type}}: {{.Title}}">{{.Ref}}</a>{{end}}</div>{{end}}{{end}}
+      </div>
+      {{end}}{{end}}
 
       <h3>Dependencies</h3>
       <div class="panel deps">

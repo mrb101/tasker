@@ -121,6 +121,9 @@ func (a *app) printItem(it *store.Item) {
 	for _, d := range it.Docs {
 		fmt.Fprintf(o, "doc:        %s %s %q [%s] (%s)\n", d.Ref, d.Type, d.Title, d.Status, d.Role)
 	}
+	if len(it.Touches) > 0 {
+		fmt.Fprintf(o, "touches:    %s\n", strings.Join(it.Touches, ", "))
+	}
 	for _, l := range it.Locations {
 		fmt.Fprintf(o, "at:         %s", l)
 		if l.SHA != "" {
@@ -321,6 +324,7 @@ func (a *app) printNext(n *store.NextResult) {
 	for _, s := range n.Skipped {
 		fmt.Fprintf(a.out, "  (skipped %s: %s)\n", s.Ref, s.Reason)
 	}
+	a.printOverlaps(n.Overlaps)
 	fmt.Fprintln(a.out, "\n----")
 	a.printItem(it)
 }

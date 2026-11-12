@@ -90,6 +90,7 @@ var locationsSchema = map[string]any{"type": "array", "description": "Places in 
 
 var itemSchema = map[string]any{
 	"locations":  locationsSchema,
+	"touches":    strs("Files or directories (ending in /) it will change, relative to the repository root"),
 	"title":      str("Short title"),
 	"body":       str("Markdown description"),
 	"type":       enum("Item type", store.ItemTypes),
@@ -107,6 +108,31 @@ var mcpTools = []mcpTool{
 		Name: "tasker_projects", Description: "List projects with counts.",
 		InputSchema: obj(map[string]any{}),
 		run:         func(s *Server, _ string, _ json.RawMessage) (any, error) { return s.store.ListProjects() },
+	},
+	{
+		Name: "tasker_context", Description: "What tasker knows about files before you change them: work in flight that touches them (other_queue = another worktree is on it: coordinate), open findings and bugs pointing at them, and finished stories that changed them with their plans and decisions. Give paths (relative to the repository root, dir/ for a directory) and/or ref (an item: its own touched paths are used).",
+		InputSchema: obj(map[string]any{"project": str("Project key (not needed with ref)"), "paths": strs("Paths relative to the repository root"), "ref": str("Item ref")}),
+		run: func(s *Server, _ string, raw json.RawMessage) (any, error) {
+			a, err := args[store.ContextQuery](raw)
+			if err != nil {
+				return nil, err
+			}
+			return s.store.Context(a)
+		},
+	},
+	{
+		Name: "tasker_report_wip", Description: "Report the files your active item's branch is changing (git diff --name-only BASE plus uncommitted), so other agents get overlap warnings. Call it as you work.",
+		InputSchema: obj(map[string]any{"ref": str("Item ref"), "paths": strs("Changed paths relative to the repository root")}, "ref", "paths"),
+		run: func(s *Server, actor string, raw json.RawMessage) (any, error) {
+			a, err := args[struct {
+				Ref   string   `json:"ref"`
+				Paths []string `json:"paths"`
+			}](raw)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true}, s.store.RecordWIP(actor, a.Ref, a.Paths)
+		},
 	},
 	{
 		Name:        "tasker_next",
@@ -174,7 +200,7 @@ var mcpTools = []mcpTool{
 		InputSchema: obj(map[string]any{
 			"ref": str("Item ref"), "title": str(""), "body": str("Markdown"), "type": enum("", store.ItemTypes), "status": enum("", store.ItemStatuses),
 			"priority": enum("", store.Priorities), "epic": str("Epic ref or ''"), "queue": str("Queue name or ''"), "assignee": str(""),
-			"branch": str(""), "pr_url": str(""), "add_labels": strs(""), "remove_labels": strs(""), "locations": locationsSchema,
+			"branch": str(""), "pr_url": str(""), "add_labels": strs(""), "remove_labels": strs(""), "locations": locationsSchema, "touches": strs("Files or directories (ending in /) it will change; replaces the list"),
 			"release": str("Release ref, e.g. API-R2, or '' to take it out"), "stretch": boolean("In its release as a stretch rather than a commitment"),
 			"if_version": map[string]any{"type": "integer", "description": "Fail if the item changed since this version"},
 		}, "ref"),
@@ -332,7 +358,7 @@ var mcpTools = []mcpTool{
 
 const mcpInstructions = `tasker tracks work for coding agents. Concepts: project (key like API) → epics (API-E1) group items (API-12: story/bug/security/research/chore).
 A queue is one git worktree; items in a queue run in order, one branch each. Documents (API-D3: research, plan, review, decision) are reviewed by a human.
-Typical loop: tasker_next → (write plan with tasker_create_doc submit=true if needed; poll tasker_get until approved) → tasker_start → implement on the given branch (put the item ref in commit messages and the PR title) → tasker_finish with pr_url and changes.`
+Typical loop: tasker_next → (write plan with tasker_create_doc submit=true if needed; poll tasker_get until approved) → tasker_start → tasker_context with the files you will change → implement on the given branch (put the item ref in commit messages and the PR title; call tasker_report_wip as files change) → tasker_finish with pr_url and changes.`
 
 func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	var req rpcReq

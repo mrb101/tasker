@@ -20,6 +20,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   `item bulk` and MCP. The CLI pins each to the current commit with the lines as a snippet; the item page shows
   them, linked to the exact lines when the project has a repository address. `tasker backfill --locations`
   suggests locations for older items from the files their text names.
+- `tasker context [PATH…]` (and MCP `tasker_context`): what tasker knows about files — items in flight that
+  change them, open findings and bugs at them, and the finished stories that changed them with their plans and
+  decisions. Agents report the files they are changing as they work (`next`, `context`, MCP `tasker_report_wip`)
+  and stories can declare what they will change (`--touches`). `next` and `start` warn when another queue is
+  changing the same files, without blocking, and log each warning in the story's activity; board cards show
+  the overlap and the story page lists work on the same files.
 - A project's repository address (Settings, or `tasker project set KEY --repo-url`) links the changed files
   and commits to GitHub, Gitea, Forgejo or any host with GitHub-style addresses.
 

@@ -175,6 +175,20 @@ func TestAPIFlowAndPages(t *testing.T) {
 		}
 	}
 
+	// context: the finished story shows up as history for the file it changed
+	c, m = req(t, ts, "GET", "/api/context?project=API&path=internal/store/work.go", nil)
+	mustStatus(200, c, m)
+	if h, _ := m["history"].([]any); len(h) != 0 {
+		t.Fatalf("API-1 is in review, not history: %v", m)
+	}
+	if f, _ := m["in_flight"].([]any); len(f) != 1 {
+		t.Fatalf("context: %v", m)
+	}
+	c, m = req(t, ts, "PUT", "/api/items/API-2/wip", map[string]any{"paths": []string{"../x"}})
+	mustStatus(400, c, m)
+	c, m = req(t, ts, "GET", "/api/context?project=API", nil)
+	mustStatus(200, c, m)
+
 	// every page renders
 	for _, p := range []string{"/", "/reviews", "/search?q=one", "/p/API", "/p/API/items", "/p/API/epics", "/p/API/docs",
 		"/p/API/activity", "/p/API/settings", "/q/API/lane", "/i/API-1", "/i/API-2", "/i/API-1/peek", "/p/API/dashboard", "/p/API/dashboard?days=365", "/p/API/releases", "/rel/API-R1", "/r/API-R1", "/e/API-E1",

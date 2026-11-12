@@ -219,7 +219,7 @@ func (a *app) epicCmd() *cobra.Command {
 
 type itemFlags struct {
 	typ, priority, epic, queue, body, file, branch, assignee string
-	labels, blockedBy, at                                    []string
+	labels, blockedBy, at, touches                           []string
 	top                                                      bool
 }
 
@@ -242,7 +242,7 @@ func (a *app) itemCreateCmd(use string) *cobra.Command {
 			}
 			enrichLocations(locs)
 			in := store.ItemInput{Title: args[0], Body: text, Type: f.typ, Priority: f.priority, Epic: f.epic, Queue: f.queue, QueueTop: f.top,
-				Labels: f.labels, BlockedBy: f.blockedBy, Branch: f.branch, Assignee: f.assignee, Locations: locs}
+				Labels: f.labels, BlockedBy: f.blockedBy, Branch: f.branch, Assignee: f.assignee, Locations: locs, Touches: toRepoPaths(f.touches)}
 			return call(a, "POST", "/api/projects/"+esc(p)+"/items", in, func(it *store.Item) {
 				where := "triage"
 				if it.Queue != "" {
@@ -265,6 +265,7 @@ func (a *app) itemCreateCmd(use string) *cobra.Command {
 	fl.StringVar(&f.branch, "branch", "", "branch name (share one branch between items)")
 	fl.StringVar(&f.assignee, "assignee", "", "assignee")
 	fl.StringArrayVar(&f.at, "at", nil, "a place in the code it is about: PATH, PATH:LINE or PATH:START-END (repeatable)")
+	fl.StringSliceVar(&f.touches, "touches", nil, "files or directories it will change, for overlap warnings (repeatable or comma separated)")
 	return cmd
 }
 
@@ -322,8 +323,8 @@ func (a *app) lsAlias() *cobra.Command {
 func (a *app) itemUpdateCmd() *cobra.Command {
 	var title, body, file, typ, status, prio, epic, queue, assignee, branch, pr, release string
 	var stretch, committed bool
-	var addL, rmL, at []string
-	var clearAt bool
+	var addL, rmL, at, touches []string
+	var clearAt, clearTouches bool
 	var ifVersion int
 	cmd := &cobra.Command{
 		Use:   "update REF...",
@@ -377,9 +378,18 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 				}
 				patch["locations"] = locs
 			}
+			if len(touches) > 0 || clearTouches {
+				t := toRepoPaths(touches)
+				if t == nil {
+					t = []string{}
+				}
+				patch["touches"] = t
+			}
 			if len(args) > 1 {
-				if _, ok := patch["locations"]; ok {
-					return &exitErr{ExitUsage, "error: --at applies to one item at a time"}
+				_, at := patch["locations"]
+				_, to := patch["touches"]
+				if at || to {
+					return &exitErr{ExitUsage, "error: --at and --touches apply to one item at a time"}
 				}
 				if _, ok := patch["title"]; ok {
 					return &exitErr{ExitUsage, "error: --title, --body and --branch apply to one item at a time"}
@@ -415,6 +425,8 @@ func (a *app) itemUpdateCmd() *cobra.Command {
 	fl.BoolVar(&committed, "committed", false, "in its release as a commitment")
 	fl.StringArrayVar(&at, "at", nil, "replace the item's code locations: PATH[:LINE[-END]] (repeatable)")
 	fl.BoolVar(&clearAt, "clear-at", false, "remove the item's code locations")
+	fl.StringSliceVar(&touches, "touches", nil, "replace the files or directories it says it will change")
+	fl.BoolVar(&clearTouches, "clear-touches", false, "remove the paths it says it will change")
 	fl.StringSliceVar(&addL, "add-label", nil, "add labels")
 	fl.StringSliceVar(&rmL, "rm-label", nil, "remove labels")
 	fl.IntVar(&ifVersion, "if-version", 0, "fail with exit 4 if the item changed since this version")
@@ -571,7 +583,12 @@ func (a *app) nextCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return call(a, "GET", path, nil, a.printNext)
+			return call(a, "GET", path, nil, func(n *store.NextResult) {
+				if n.Resume {
+					a.reportWIP(n.Item, n.BaseBranch) // so other worktrees see what this one is changing
+				}
+				a.printNext(n)
+			})
 		},
 	}
 	cmd.Flags().StringVarP(&queue, "queue", "q", "", "queue (default: TASKER_QUEUE or the queue bound to this worktree)")
@@ -623,6 +640,7 @@ func (a *app) startCmd() *cobra.Command {
 				}
 			}
 			fmt.Fprintf(a.out, "started %s %s\nbranch: %s\n", it.Ref, it.Title, it.Branch)
+			a.printOverlaps(it.Overlaps)
 			if base != "" {
 				fmt.Fprintf(a.out, "git:    git switch -c %s %s   (or git switch %s if it exists)\n", it.Branch, base, it.Branch)
 			}

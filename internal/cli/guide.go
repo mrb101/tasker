@@ -35,6 +35,9 @@ Add --json to any command for machine-readable output.
 ## Work loop
   tasker next                          # next item for this worktree's queue (or -p KEY for project priority)
   tasker start                         # claims it, marks active, prints branch + base: run the git command shown
+                                       # ⚠ lines = another queue is changing the same files: coordinate
+  tasker context                       # before editing: work in flight, open findings and past stories (with
+                                       # their plans) for the files you change; also tells others what you touch
   # if the project has a plan gate (or the item is non-trivial), plan first:
   tasker doc create --type plan --for API-12 -f plan.md --submit
   tasker doc wait API-D3               # exit 0 approved, 10 changes requested (read comments, revise:)
@@ -47,6 +50,7 @@ Add --json to any command for machine-readable output.
   tasker add "Title" -t bug --priority high -e API-E2 -q auth-lane --blocked-by API-10 -f body.md
   tasker item bulk findings.yaml --doc API-D9      # many items at once (see: tasker item bulk --help)
   tasker add "SQL built by hand" -t security --at internal/store/items.go:120-134   # point at the code (repeatable)
+  tasker item update API-12 --touches internal/auth/,cmd/api/main.go   # what a story will change (overlap warnings)
   tasker epic create "Epic title" -f epic.md
   tasker doc create --type research --for API-E2 -f notes.md
   tasker doc create --type review -f security-review.md --submit   # then file findings with bulk --doc
@@ -57,6 +61,7 @@ Add --json to any command for machine-readable output.
   tasker queue show                      # ordered queue for this worktree
   tasker doc show API-D3 --raw           # markdown only
   tasker search "rate limit"
+  tasker context internal/auth/          # what tasker knows about files (dir/ = everything under it)
 
 ## Updating
   tasker item update API-12 --status done --add-label perf --if-version 4   # exit 4 if changed meanwhile

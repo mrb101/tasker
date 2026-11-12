@@ -101,6 +101,7 @@ type ItemInput struct {
 	Branch    string     `json:"branch"`
 	BlockedBy []string   `json:"blocked_by"`
 	Locations []Location `json:"locations"` // places in the code it is about ("path:12-20" or objects)
+	Touches   []string   `json:"touches"`   // files or directories (ending in /) it will change
 }
 
 func (s *Store) CreateItem(actor, projectKey string, in ItemInput) (*Item, error) {
@@ -229,6 +230,15 @@ func (s *Store) createItemTx(t *txc, pr *Project, in ItemInput) (int64, string, 
 	}
 	if len(in.Locations) > 0 {
 		if err := s.setLocationsTx(t, id, in.Locations); err != nil {
+			return 0, "", err
+		}
+	}
+	if len(in.Touches) > 0 {
+		touches, err := normTouches(in.Touches)
+		if err != nil {
+			return 0, "", err
+		}
+		if err := setPathsTx(t, id, "declared", touches); err != nil {
 			return 0, "", err
 		}
 	}
@@ -367,6 +377,9 @@ func (s *Store) GetItem(ref string) (*Item, error) {
 		return nil, err
 	}
 	if it.Locations, err = s.locations(s.db, it.ID); err != nil {
+		return nil, err
+	}
+	if it.Touches, err = s.touches(s.db, it.ID); err != nil {
 		return nil, err
 	}
 	if it.Changes, err = s.changes(s.db, it.ID); err != nil {
@@ -583,6 +596,7 @@ type ItemPatch struct {
 	Release      *string     `json:"release"`   // a release ref, or "" to take it out of its release
 	Stretch      *bool       `json:"stretch"`   // in its release as a stretch rather than a commitment
 	Locations    *[]Location `json:"locations"` // replaces the item's code locations; [] clears them
+	Touches      *[]string   `json:"touches"`   // replaces the paths it says it will change; [] clears them
 	AddLabels    []string    `json:"add_labels"`
 	RemoveLabels []string    `json:"remove_labels"`
 	IfVersion    int         `json:"if_version"`
@@ -606,7 +620,7 @@ func (s *Store) BulkUpdate(actor, projectKey string, refs []string, p ItemPatch)
 	if len(refs) > 1000 {
 		return nil, invalid("at most 1000 items at once")
 	}
-	if p.Title != nil || p.Body != nil || p.Branch != nil || p.PRURL != nil || p.Labels != nil || p.Locations != nil || p.IfVersion != 0 {
+	if p.Title != nil || p.Body != nil || p.Branch != nil || p.PRURL != nil || p.Labels != nil || p.Locations != nil || p.Touches != nil || p.IfVersion != 0 {
 		return nil, invalid("a bulk change can set status, priority, type, epic, queue, assignee and labels only")
 	}
 	key := strings.ToUpper(projectKey)
@@ -787,6 +801,16 @@ func (s *Store) updateItemTx(t *txc, ref string, p ItemPatch) error {
 			return err
 		}
 		changes = append(changes, "locations")
+	}
+	if p.Touches != nil {
+		touches, err := normTouches(*p.Touches)
+		if err != nil {
+			return err
+		}
+		if err := setPathsTx(t, it.ID, "declared", touches); err != nil {
+			return err
+		}
+		changes = append(changes, "touches")
 	}
 	if p.Queue != nil {
 		if *p.Queue == "" {
