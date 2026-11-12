@@ -13,13 +13,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Add 
   branch, or the story ahead of it in a stacked queue. The story page lists them, cards and the quick view show
   the totals, and `tasker item changes` prints them. `tasker item changes --record` measures again, e.g. after
   review fixes. The server still never runs git; MCP clients pass `changes` to `tasker_finish` themselves.
-- `tasker backfill` finds what earlier stories changed in the repository's history — their branch, the merge
-  or squash commit of their pull request, or commits that name them — and records it with `--apply` (a dry run
+- `tasker backfill` finds what earlier stories changed in the repository's history — their branch, merge
+  commits that name them or their branch, the merge or squash commit of their pull request, or commits made for
+  them (the ref leading the subject, or a "Refs:" trailer; passing mentions do not count) — and records it with `--apply` (a dry run
   otherwise). `--gh` asks GitHub as a last resort. Each story says how its changes were found.
 - Items can point at places in the code: `--at path:12-20` on `tasker add` and `item update`, `locations:` in
   `item bulk` and MCP. The CLI pins each to the current commit with the lines as a snippet; the item page shows
   them, linked to the exact lines when the project has a repository address. `tasker backfill --locations`
-  suggests locations for older items from the files their text names.
+  suggests locations for older items from the places their text names with line numbers (`--include-files`
+  for bare file names too).
 - `tasker context [PATH…]` (and MCP `tasker_context`): what tasker knows about files — items in flight that
   change them, open findings and bugs at them, and the finished stories that changed them with their plans and
   decisions. Agents report the files they are changing as they work (`next`, `context`, MCP `tasker_report_wip`)

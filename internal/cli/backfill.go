@@ -99,6 +99,44 @@ func prMentionRe(n string) *regexp.Regexp {
 	return regexp.MustCompile(`\(#` + n + `\)|pull request #` + n + `\b|merge request \S*!` + n + `\b|(?:^|\s)!` + n + `\b`)
 }
 
+// ownerRe matches a commit message made for an item: the ref leads the subject,
+// after an optional conventional-commit type, or a trailer line names it.
+func ownerRe(ref string) *regexp.Regexp {
+	r := regexp.QuoteMeta(ref) + `(?:[^0-9]|$)`
+	return regexp.MustCompile(`(?im)\A\s*(?:[a-z]+(?:\([^)]*\))?!?:\s*)?[\[(]?` + r +
+		`|^(?:refs?|closes|fixes|resolves|part of|issue|story|task)\b[^\n]*?(?:^|[^A-Za-z0-9])` + r)
+}
+
+// unionChanges adds several measurements together, per file.
+func unionChanges(parts []*store.Changes) *store.Changes {
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	c := &store.Changes{HeadSHA: parts[0].HeadSHA}
+	at := map[string]int{}
+	seen := map[string]bool{}
+	for _, p := range parts {
+		for _, f := range p.Files {
+			if i, ok := at[f.Path]; ok {
+				c.Files[i].Added += f.Added
+				c.Files[i].Deleted += f.Deleted
+				continue
+			}
+			at[f.Path] = len(c.Files)
+			c.Files = append(c.Files, f)
+		}
+		for _, cm := range p.Commits {
+			if !seen[cm.SHA] {
+				seen[cm.SHA] = true
+				c.Commits = append(c.Commits, cm)
+			}
+		}
+	}
+	sort.Slice(c.Files, func(i, j int) bool { return c.Files[i].Path < c.Files[j].Path })
+	sumChanges(c)
+	return c
+}
+
 // refRe matches an item ref as a whole word: API-12 but not API-123 or XAPI-12.
 func refRe(ref string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(^|[^A-Za-z0-9])` + regexp.QuoteMeta(ref) + `($|[^0-9])`)
@@ -209,13 +247,32 @@ func (t *trunk) findChanges(it *store.Item, useGH bool) (*store.Changes, string,
 			}
 			// Fast-forwarded or rebased onto the trunk: fall through to the messages.
 		}
-		for i := range t.commits {
-			m := &t.commits[i]
-			if len(m.Parents) >= 2 && branchMentioned(m.Message, it.Branch) {
-				c, err := mergeChanges(m)
-				return c, "merge commit " + shortSHA(m.SHA), err
-			}
+	}
+	// Merge commits that name the story or its branch ("Merge SKEMA-1: …",
+	// "Merge branch 'api-12-…'"): each brought in the story's branch. A story
+	// merged more than once (a follow-up fix) adds them up.
+	re := refRe(it.Ref)
+	var merges []*trunkCommit
+	for i := range t.commits {
+		m := &t.commits[i]
+		if len(m.Parents) >= 2 && (re.MatchString(m.Subject) || (it.Branch != "" && branchMentioned(m.Message, it.Branch))) {
+			merges = append(merges, m)
 		}
+	}
+	if len(merges) > 0 {
+		var parts []*store.Changes
+		for _, m := range merges {
+			c, err := mergeChanges(m)
+			if err != nil {
+				return nil, "", err
+			}
+			parts = append(parts, c)
+		}
+		via := "merge commit " + shortSHA(merges[0].SHA)
+		if len(merges) > 1 {
+			via = fmt.Sprintf("%d merge commits", len(merges))
+		}
+		return unionChanges(parts), via, nil
 	}
 	if pr != "" {
 		mentions := prMentionRe(pr)
@@ -232,16 +289,19 @@ func (t *trunk) findChanges(it *store.Item, useGH bool) (*store.Changes, string,
 			return c, "PR #" + pr + " commit " + shortSHA(m.SHA), err
 		}
 	}
-	re := refRe(it.Ref)
+	// Commits made for the story: its ref leads the subject ("API-12: …",
+	// "fix(auth): API-12 …", "[API-12] …") or sits in a trailer ("Refs: API-12").
+	// A passing mention ("record API-12 as merged") does not count.
+	owner := ownerRe(it.Ref)
 	var named []trunkCommit
 	for _, m := range t.commits {
-		if len(m.Parents) < 2 && re.MatchString(m.Message) {
+		if len(m.Parents) < 2 && owner.MatchString(m.Message) {
 			named = append(named, m)
 		}
 	}
 	if len(named) > 0 {
 		c, err := commitsChanges(named)
-		return c, fmt.Sprintf("%d commit(s) naming %s", len(named), it.Ref), err
+		return c, fmt.Sprintf("%d commit(s) for %s", len(named), it.Ref), err
 	}
 	if useGH && pr != "" {
 		c, err := ghChanges(pr)
@@ -293,7 +353,7 @@ func ghChanges(pr string) (*store.Changes, error) {
 }
 
 func (a *app) backfillCmd() *cobra.Command {
-	var apply, redo, useGH, locations bool
+	var apply, redo, useGH, locations, includeFiles bool
 	var base string
 	var statuses []string
 	cmd := &cobra.Command{
@@ -303,17 +363,17 @@ func (a *app) backfillCmd() *cobra.Command {
 tasker recorded changes did, and with --apply records it. For each story it tries, in order:
 
   1. its branch, if it still exists: an open branch, or the merge commit that brought it in
-  2. a merge commit naming the branch ("Merge pull request #12 from you/api-12-…")
-  3. a squash commit with the PR number in its subject ("… (#12)")
-  4. commits whose message names the story (API-12)
+  2. merge commits naming the story or its branch ("Merge API-12: …", "Merge branch 'api-12-…'")
+  3. the merge or squash commit of its pull/merge request ("… (#12)", "See merge request …!12")
+  4. commits made for the story: its ref leads the subject ("API-12: …") or a trailer ("Refs: API-12")
   5. with --gh: the pull request on GitHub, through the gh CLI
 
 Stories that already have changes are skipped (--redo includes them). Without REFs it looks at
 the project's stories in review or done.
 
 --locations instead looks for places in the code that items name in their title or description
-("internal/store/items.go:120", "items.go#L12-L20", a path in backticks) and suggests them as the
-item's code locations, pinned to the commit that was current when the item was written. Mentions
+("internal/store/items.go:120", "items.go#L12-L20") and suggests them as the item's code locations
+(--include-files: also files named without lines), pinned to the commit that was current when the item was written. Mentions
 must resolve to a file in the repository; items that already have locations are left alone.
 Without REFs it looks at every item that is not cancelled.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -347,7 +407,7 @@ Without REFs it looks at every item that is not cancelled.`,
 				}
 			}
 			if locations {
-				return a.backfillLocations(items, base, apply)
+				return a.backfillLocations(items, base, apply, includeFiles)
 			}
 			trunks := map[string]*trunk{}
 			queueBase := map[string]string{}
@@ -442,6 +502,7 @@ Without REFs it looks at every item that is not cancelled.`,
 	cmd.Flags().BoolVar(&apply, "apply", false, "save what was found (default: dry run)")
 	cmd.Flags().BoolVar(&redo, "redo", false, "include stories that already have changes")
 	cmd.Flags().BoolVar(&locations, "locations", false, "suggest code locations from the files items name in their text")
+	cmd.Flags().BoolVar(&includeFiles, "include-files", false, "with --locations: also suggest files mentioned without line numbers")
 	cmd.Flags().BoolVar(&useGH, "gh", false, "as a last resort, ask GitHub about the story's pull request (needs gh)")
 	cmd.Flags().StringVar(&base, "base", "", "branch whose history to search (default: each story's queue base, else origin/HEAD, main or master)")
 	cmd.Flags().StringSliceVarP(&statuses, "status", "s", []string{"review", "done"}, "which stories to look at")

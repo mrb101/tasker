@@ -79,6 +79,16 @@ func historyRepo(t *testing.T) {
 	run("switch", "-q", "main")
 	run("merge", "-q", "--ff-only", "api-7-ff")
 
+	// API-9: merged as "Merge API-9: …" from a branch tasker never knew; later a
+	// handoff note mentions it in passing (must not count)
+	run("switch", "-q", "-c", "nine-work")
+	commit("nine/a.go", "nine")
+	commit("nine/b.go", "more nine")
+	run("switch", "-q", "main")
+	run("merge", "-q", "--no-ff", "-m", "Merge API-9: nine", "nine-work")
+	run("branch", "-q", "-D", "nine-work")
+	commit("HANDOFF.md", "docs: record API-9 as merged in the handoff")
+
 	// API-5: an open branch, not merged
 	run("switch", "-q", "-c", "api-5-c")
 	commit("five/a.go", "wip")
@@ -104,9 +114,10 @@ func TestBackfillFindsChanges(t *testing.T) {
 		{store.Item{Ref: "API-1", Branch: "api-1-a"}, "branch, merged in", []string{"one/a.go", "one/b.go"}, 2},
 		{store.Item{Ref: "API-2", Branch: "api-2-b"}, "merge commit", []string{"two/a.go"}, 1},
 		{store.Item{Ref: "API-3", Branch: "api-3-gone", PRURL: "https://github.com/me/x/pull/7"}, "PR #7 commit", []string{"three/a.go"}, 1},
-		{store.Item{Ref: "API-4"}, "2 commit(s) naming API-4", []string{"four/a.go", "four/b.go"}, 2},
-		{store.Item{Ref: "API-7", Branch: "api-7-ff"}, "1 commit(s) naming API-7", []string{"seven/a.go"}, 1},
+		{store.Item{Ref: "API-4"}, "2 commit(s) for API-4", []string{"four/a.go", "four/b.go"}, 2},
+		{store.Item{Ref: "API-7", Branch: "api-7-ff"}, "1 commit(s) for API-7", []string{"seven/a.go"}, 1},
 		{store.Item{Ref: "API-5", Branch: "api-5-c"}, "open branch", []string{"five/a.go"}, 1},
+		{store.Item{Ref: "API-9", Branch: "api-9-nine"}, "merge commit", []string{"nine/a.go", "nine/b.go"}, 2},
 		{store.Item{Ref: "API-8", Branch: "api-8-gone", PRURL: "https://gitlab.example.com/team/api/-/merge_requests/12"}, "merge commit", []string{"eight/a.go"}, 1},
 	} {
 		c, via, err := tr.findChanges(&tc.it, false)
@@ -159,7 +170,7 @@ func TestMentionedLocations(t *testing.T) {
 	text := "The query in `internal/store/items.go:120-134` is built by hand (see also store/items.go).\n" +
 		"main.go#L3-L9 and README.md. api.go is ambiguous; https://example.com/api.go is a URL;\n" +
 		"items.go:120-134 again; nothing.go:4 does not exist; version 1.2 is not a file; main.go:7:2"
-	got := mentionedLocations(text, rf)
+	got := mentionedLocations(text, rf, true)
 	var names []string
 	for _, l := range got {
 		names = append(names, l.String())
@@ -167,6 +178,14 @@ func TestMentionedLocations(t *testing.T) {
 	want := "internal/store/items.go:120-134,cmd/tasker/main.go:3-9,README.md,cmd/tasker/main.go:7"
 	if strings.Join(names, ",") != want {
 		t.Fatalf("got  %s\nwant %s", strings.Join(names, ","), want)
+	}
+	// By default a file named without lines is not a location ("see README.md", "manage.py migrate").
+	names = nil
+	for _, l := range mentionedLocations(text, rf, false) {
+		names = append(names, l.String())
+	}
+	if strings.Join(names, ",") != "internal/store/items.go:120-134,cmd/tasker/main.go:3-9,cmd/tasker/main.go:7" {
+		t.Fatalf("without files: %s", strings.Join(names, ","))
 	}
 }
 
@@ -180,5 +199,24 @@ func TestCommitAt(t *testing.T) {
 	head, _ := git("rev-parse", "main")
 	if sha := commitAt("main", time.Now().Add(time.Hour).UTC().Format(time.RFC3339)); sha != head {
 		t.Fatalf("now: %q", sha)
+	}
+}
+
+func TestOwnerRe(t *testing.T) {
+	re := ownerRe("API-4")
+	for msg, want := range map[string]bool{
+		"API-4: first":                 true,
+		"[API-4] first":                true,
+		"fix(auth): API-4 limit":       true,
+		"feat!: API-4 breaking":        true,
+		"fix typo\n\nRefs api-4":       true,
+		"x\n\nCloses: API-4, API-5":    true,
+		"docs: record API-4 as merged": false,
+		"API-40: other":                false,
+		"handoff after API-4":          false,
+	} {
+		if re.MatchString(msg) != want {
+			t.Errorf("%q: %v", msg, !want)
+		}
 	}
 }

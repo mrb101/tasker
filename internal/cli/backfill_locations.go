@@ -60,8 +60,10 @@ func (rf *repoFiles) resolve(p string) string {
 	return ""
 }
 
-// mentionedLocations finds the code locations an item's text names.
-func mentionedLocations(text string, rf *repoFiles) []store.Location {
+// mentionedLocations finds the code locations an item's text names. Without
+// files, only mentions with line numbers count: a bare file name is more often
+// a reference ("see CLAUDE.md") or a command ("manage.py migrate") than a place.
+func mentionedLocations(text string, rf *repoFiles, files bool) []store.Location {
 	var out []store.Location
 	seen := map[string]bool{}
 	for _, m := range mentionRe.FindAllStringSubmatch(text, -1) {
@@ -91,7 +93,7 @@ func mentionedLocations(text string, rf *repoFiles) []store.Location {
 	}
 	keep := out[:0]
 	for _, l := range out {
-		if l.Line == 0 && withLines[l.Path] {
+		if l.Line == 0 && (withLines[l.Path] || !files) {
 			continue
 		}
 		keep = append(keep, l)
@@ -112,7 +114,7 @@ func commitAt(trunkRef, ts string) string {
 }
 
 // backfillLocations suggests code locations from the text of items without any.
-func (a *app) backfillLocations(items []*store.Item, base string, apply bool) error {
+func (a *app) backfillLocations(items []*store.Item, base string, apply, files bool) error {
 	ref, err := resolveTrunk(base)
 	if err != nil {
 		return err
@@ -128,7 +130,7 @@ func (a *app) backfillLocations(items []*store.Item, base string, apply bool) er
 	filesAt := map[string]*repoFiles{}
 	for _, it := range items {
 		text := it.Title + "\n" + it.Body
-		if len(mentionedLocations(text, head)) == 0 {
+		if len(mentionedLocations(text, head, files)) == 0 {
 			continue
 		}
 		full := &store.Item{}
@@ -151,7 +153,7 @@ func (a *app) backfillLocations(items []*store.Item, base string, apply bool) er
 				filesAt[at] = rf
 			}
 		}
-		locs := mentionedLocations(text, rf)
+		locs := mentionedLocations(text, rf, files)
 		if len(locs) == 0 {
 			continue
 		}
